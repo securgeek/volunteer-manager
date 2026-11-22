@@ -9,6 +9,8 @@ Two properties this file exists to preserve, both easy to lose by accident:
   confirmation; the POST behind it is what consumes.
 """
 import asyncio
+import html
+import re
 import sqlite3
 import time
 from typing import Optional
@@ -224,6 +226,11 @@ async def request_link(request: Request, email: str = Form(...),
             "detail": "Check your inbox for a sign-in link."}
 
 
+# What security.new_secret makes: URL-safe base64. Anything else can't be a token, and is never
+# put into the page (CodeQL #10: this is the one HTML page either app builds by hand).
+_TOKEN_SHAPE = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
+
+
 @router.get("/api/portal/verify", response_class=HTMLResponse)
 def verify_page(t: str = ""):
     """Render a confirm-click page. Deliberately has no side effect.
@@ -234,7 +241,9 @@ def verify_page(t: str = ""):
     Args:
         t: The token from the link. Not consumed here.
     """
-    token_ok = bool(t)
+    token_ok = bool(_TOKEN_SHAPE.match(t or ""))
+    # Escaped as well, though the shape check already rules out every special character.
+    safe_t = html.escape(t, quote=True) if token_ok else ""
     body = f"""<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Confirm sign-in</title>
@@ -251,9 +260,9 @@ def verify_page(t: str = ""):
 <div class="card">
   <h2>Confirm sign-in</h2>
   {"<p>Click below to finish signing in.</p>" if token_ok
-   else '<p class="err">This link is missing its token. Request a new one.</p>'}
+   else '<p class="err">This link is missing its token, or it is damaged. Request a new one.</p>'}
   {'''<form method="post" action="/api/portal/verify">
-    <input type="hidden" name="t" value="''' + t + '''">
+    <input type="hidden" name="t" value="''' + safe_t + '''">
     <label><input type="checkbox" name="remember" value="1"> Remember this browser</label>
     <button type="submit">Sign in</button>
   </form>''' if token_ok else ''}
