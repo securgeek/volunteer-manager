@@ -46,7 +46,10 @@ router = APIRouter()
 NAME_MAX = 60
 HANDLE_MAX = 40
 EXTRAS_MAX = 20
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The domain is dot-separated labels, each without a dot, so the match can't backtrack (a
+# domain part of [^@\s]+\.[^@\s]+ could, quadratically: CodeQL #3, #4, #6). It also refuses an
+# empty label, as in a@.b or a@b..c, which were never deliverable anyway.
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 
 
 # ── state ─────────────────────────────────────────────────────────────────────

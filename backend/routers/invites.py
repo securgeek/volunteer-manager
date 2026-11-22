@@ -12,6 +12,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 * **72 hours, single use, revocable.**
 """
 import hashlib
+import logging
 import re
 import secrets
 import uuid
@@ -28,7 +29,10 @@ router = APIRouter()
 
 INVITE_HOURS = 72
 ROLES = ("organizer", "checkin", "view")
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The domain is dot-separated labels, each without a dot, so the match can't backtrack (a
+# domain part of [^@\s]+\.[^@\s]+ could, quadratically: CodeQL #3, #4, #6). It also refuses an
+# empty label, as in a@.b or a@b..c, which were never deliverable anyway.
+EMAIL = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 
 
 def token_hash(token: str) -> str:
@@ -120,10 +124,13 @@ async def create_invite(
                 hours=INVITE_HOURS)
             out["emailed"] = True
         # Deliberately broad: a failed mail mustn't undo the invite. The link is still
-        # usable, and the error goes back to the organizer as email_error.
+        # usable. The organizer is told it didn't send; the reason (which can carry the
+        # portal's reply) goes to the server log, not the page (CodeQL #7).
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            out["email_error"] = f"The invite was created, but the email couldn't be sent " \
-                                 f"({exc}). Copy the link and send it yourself."
+            logging.getLogger(__name__).warning("invite %s: mail not sent: %s", invite_id, exc)
+            out["email_error"] = ("The invite was created, but the email couldn't be sent. "
+                                  "Copy the link and send it yourself; Admin → Volunteer "
+                                  "Portal shows any mail problems.")
     return out
 
 

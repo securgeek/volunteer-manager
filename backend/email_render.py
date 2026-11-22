@@ -146,7 +146,9 @@ def _html_fragment(markdown: str) -> str:
 
 def _text(markdown: str) -> str:
     # An image becomes its alt text; the rest of the Markdown reads fine as plain text.
-    out = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", markdown or "")
+    # Bounded, so a template full of unclosed "![" can't make this quadratic (CodeQL #2): an
+    # image's alt text and address are never this long.
+    out = re.sub(r"!\[([^\]]{0,500})\]\([^)]{0,2000}\)", r"\1", markdown or "")
     return out.strip() + "\n"
 
 
