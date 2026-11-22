@@ -1,0 +1,67 @@
+.se-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.se-table th,
+.se-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--p-content-border-color);
+  text-align: left;
+  vertical-align: middle;
+}
+.se-table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--p-text-muted-color);
+}
+.se-table tbody tr:last-child td { border-bottom: none; }
+.se-table tbody tr:hover td { background: var(--p-content-hover-background); }
+.actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+.add-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.empty {
+  text-align: center;
+  color: var(--p-text-muted-color);
+  padding: 1.5rem !important;
+}
+/* Secondary options under an add row: checkbox groups, fill toggles. */
+.add-opts {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  font-size: 0.875rem;
+}
+.add-opts-label {
+  color: var(--p-text-muted-color);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.opt label { cursor: pointer; }
+.key-badge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--p-content-hover-background);
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+.sep { color: var(--p-text-muted-color); }

@@ -1,0 +1,30 @@
+# Working plans: local notes, not part of the repo
+plans/
+
+# MkDocs build output (mkdocs build → site/)
+site/
+
+# Python and test leftovers
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Secrets: real environment files and keys. .env.example is the template and is kept.
+.env
+.env.*
+.env_*
+!.env.example
+*.pem
+*.key
+api_key*
+
+# Build output and dependencies
+frontend/node_modules/
+frontend/dist/
+
+# Runtime data: the audit log, local databases, the mailer's state and packages
+logs/
+*.db
+box.json
+vol_mail_state/

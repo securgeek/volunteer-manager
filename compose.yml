@@ -1,0 +1,167 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB:       scheduler
+      POSTGRES_USER:     scheduler
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      # 18+ keeps its data in ./18/docker under this mount, and refuses to start on an
+      # older version's data, so a major upgrade is a dump and restore into a fresh volume
+      # (backend/CLAUDE.md → Upgrading PostgreSQL).
+      - pgdata18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST:     postgres
+      DB_PORT:     "5432"
+      DB_NAME:     scheduler
+      DB_USER:     scheduler
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Portal sync. Leave PORTAL_SYNC_URL unset to run without a portal — the sync task
+      # then never starts and nothing else changes.
+      PORTAL_SYNC_URL:       ${PORTAL_SYNC_URL:-}
+      PORTAL_SYNC_INTERVAL:  ${PORTAL_SYNC_INTERVAL:-30}
+      PORTAL_SYNC_VERIFY_TLS: ${PORTAL_SYNC_VERIFY_TLS:-1}
+      SYNC_KEY_ID:           ${SYNC_KEY_ID:-}
+      SYNC_SECRET:           ${SYNC_SECRET:-}
+      # Same value as the portal's. Never stored in either database — see portal/CLAUDE.md.
+      EMAIL_HMAC_KEY:        ${EMAIL_HMAC_KEY:-}
+      # The organizer site's origin: the passkey relying party (routers/passkeys.py) and the
+      # base of invite and reset links. Passkeys registered under one hostname never work
+      # under another. Unset, it falls back to PORTAL_PUBLIC_URL (one origin, local dev).
+      ADMIN_PUBLIC_URL:      ${ADMIN_PUBLIC_URL:-}
+      PORTAL_PUBLIC_URL:     ${PORTAL_PUBLIC_URL:-http://localhost:8080}
+    volumes:
+      - ./logs:/app/logs:z,U,rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    # The way in. A tunnel client on the host dials these two loopback publishes, with TLS
+    # terminated at the edge (frontend/default.conf):
+    #   FRONTEND_PORT    → 8080, the full site, for ADMIN_PUBLIC_URL (behind the access gate)
+    #   PORTAL_SITE_PORT → 8082, the volunteer portal only, for PORTAL_PUBLIC_URL (public)
+    # Loopback-only and above 1024: nginx serves plain HTTP, which must not be reachable from
+    # the host's LAN. Rootless can't bind <1024 anyway.
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+      - "127.0.0.1:${PORTAL_SITE_PORT:-8082}:8082"
+    # No depends_on, on purpose. podman-compose turns every depends_on into a hard
+    # `podman --requires` link: a required container can't be removed while its dependents
+    # exist, and `down` runs its stops one at a time. nginx needs no ordering anyway — it
+    # resolves backend and portal per request (default.conf) and 502s until they are up.
+
+  # The volunteer portal. A separate application: its own SQLite store, its own schema
+  # version, its own sessions. It never connects to postgres and never imports from backend/.
+  # One worker on purpose — SQLite has a single writer.
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    environment:
+      PORTAL_DB:        /data/portal.db
+      PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:-http://localhost:8080}
+      # Admin invite and reset links must start with this (routers/sync.py). Same value as
+      # the backend's; unset, it's PORTAL_PUBLIC_URL.
+      ADMIN_PUBLIC_URL:  ${ADMIN_PUBLIC_URL:-}
+      MAIL_BACKEND:     ${MAIL_BACKEND:-file}
+      MAIL_DIR:         /app/logs/portal_mail
+      SMTP_HOST:        ${SMTP_HOST:-}
+      SMTP_PORT:        ${SMTP_PORT:-587}
+      SMTP_USER:        ${SMTP_USER:-}
+      SMTP_PASS:        ${SMTP_PASS:-}
+      SMTP_FROM:        ${SMTP_FROM:-volunteers@example.org}
+      # MAIL_BACKEND=relay only. The Graph credentials are in mailrelay, never here.
+      MAIL_RELAY_URL:   http://mailrelay:5002
+      MAIL_RELAY_TOKEN: ${MAIL_RELAY_TOKEN:-}
+      # Required, no default: the portal refuses to start without it, because generating a
+      # fresh key would orphan every stored email_hmac.
+      EMAIL_HMAC_KEY:   "${EMAIL_HMAC_KEY:?set EMAIL_HMAC_KEY - generate one with openssl rand -hex 32}"
+      SYNC_KEY_ID:      "${SYNC_KEY_ID:?set SYNC_KEY_ID}"
+      SYNC_SECRET:      "${SYNC_SECRET:?set SYNC_SECRET}"
+      SYNC_SECRET_PREV: ${SYNC_SECRET_PREV:-}
+    # No host publish: the backend syncs over the compose network and browsers come through
+    # nginx's /api/portal/. default for both of those; mail_internal is how it reaches
+    # mailrelay.
+    networks:
+      - default
+      - mail_internal
+    volumes:
+      # :U re-owns the volume to the container's user (1001) on start, as ./logs does; the
+      # portal ran as root before, so existing data starts out root-owned.
+      - portal_data:/data:U
+      - ./logs:/app/logs:z,U,rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # The only container holding a Microsoft Graph credential: a delegated refresh token for
+  # RELAY_MAILBOX, created once with `podman-compose exec mailrelay python relay.py login`
+  # and kept on the mailrelay_state volume. It sends plain text as MAIL_SENDER and nothing
+  # else; see mailrelay/CLAUDE.md. No published ports. Only the portal shares mail_internal with it,
+  # and mail_egress is its way out to Microsoft. With MAIL_BACKEND=file it isn't needed,
+  # and it exits at start if its settings are missing.
+  mailrelay:
+    build:
+      context: ./mailrelay
+      dockerfile: Dockerfile
+    environment:
+      GRAPH_TENANT_ID:     ${GRAPH_TENANT_ID:-}
+      GRAPH_CLIENT_ID:     ${GRAPH_CLIENT_ID:-}
+      MAIL_RELAY_TOKEN:    ${MAIL_RELAY_TOKEN:-}
+      # The account that signs in, and the mailbox mail goes through. It needs Send As on
+      # MAIL_SENDER.
+      RELAY_MAILBOX:       ${RELAY_MAILBOX:-}
+      # The From address of every message. Required: the relay won't start without it.
+      MAIL_SENDER:         ${MAIL_SENDER:-}
+    volumes:
+      - mailrelay_state:/state
+    networks:
+      - mail_internal
+      - mail_egress
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5002/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  default:
+  # No route out: the portal reaches mailrelay here and nothing else does.
+  mail_internal:
+    internal: true
+  mail_egress:
+
+volumes:
+  pgdata:       # PostgreSQL 16 data, kept untouched for rollback; remove once 18 has settled
+  pgdata18:
+  portal_data:
+  mailrelay_state:

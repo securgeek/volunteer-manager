@@ -1,0 +1,8 @@
+{{ app_title }}
+
+Use the link below to {{ verb }}. You'll be asked to confirm before anything happens.
+
+{{ link }}
+
+This link works once and expires in {{ ttl }} minutes. If you didn't ask for it, you can
+ignore this message — nothing has been changed and no account was created.

@@ -1,0 +1,13 @@
+# Bandit configuration for BSides. Run through ./run_lint.sh:
+#   production code: every test, failing at medium severity and medium confidence or above;
+#   test files:      the same, but B101 (assert) skipped, because asserts are how pytest works.
+#
+# No global skips. An accepted finding is marked where it happens, with the reason:
+#   value = subprocess.run(cmd)  # nosec B603 — cmd is a fixed list, no user input
+#
+# Directories that are never scanned (run_lint.sh also passes explicit paths only).
+exclude_dirs:
+  - frontend
+  - node_modules
+  - .venv
+  - __pycache__

@@ -1,0 +1,47 @@
+# Read by `rsync -F`. Keeps local-only files off the web server, and, with --delete,
+# stops rsync from deleting server-only files.
+#
+#   rsync -aF BSides/ "$DEPLOY_HOST:Scheduler/"     # DEPLOY_HOST is in .env
+#
+# .env is deliberately NOT excluded: the containers need it, and it syncs as before.
+
+# Keys and secrets: never on the server
+- *.pem
+- *.key
+- api_key*
+- .env.bak*
+
+# The schedule mailer runs on an organizer's machine, never the server
+- /tools/
+- box.json
+- vol_mail_state/
+- schedule-email-*.zip
+
+# Development tooling and docs: lint, docs site, working plans. None of it runs on the server.
+- /.pylintrc
+- /bandit.yaml
+- /requirements-dev.txt
+- /run_lint.sh
+- /lint/
+- /mkdocs.yml
+- /docs/
+- /site/
+- /plans/
+
+# Legacy app: reference code, plus old volunteer data in its .db files
+- /Scheduler/
+
+# Build and test leftovers
+- __pycache__/
+- *.py[cod]
+- .pytest_cache/
+- .venv/
+- node_modules/
+- /frontend/dist/
+
+# The server's own state
+- /logs/
+
+# Editor files
+- *.code-workspace
+- .claude/

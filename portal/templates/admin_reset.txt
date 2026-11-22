@@ -1,0 +1,9 @@
+{{ app_title }}
+
+Someone asked to reset the password for the account {{ username }}. Use the link below to
+choose a new one. Resetting signs that account out everywhere.
+
+{{ link }}
+
+This link works once and expires in {{ minutes }} minutes. If you didn't ask for this, you can
+ignore this message: your password hasn't changed.

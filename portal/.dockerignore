@@ -1,0 +1,17 @@
+# Keep test code, caches, and local config out of the production image.
+# The backend's Dockerfile uses an explicit COPY allowlist; this one uses `COPY . .`,
+# so the filtering has to happen here instead.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+test_*.py
+
+# A local dev run leaves a SQLite file here; in the container it belongs on the volume.
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets and developer docs are not runtime dependencies.
+.env
+.env.*
+CLAUDE.md

@@ -1,0 +1,155 @@
+# Pylint configuration for BSides. Run it through ./run_lint.sh, which lints each application
+# in its own process (backend/ and portal/ both define `db` and `main`, so one run would resolve
+# imports against the wrong app — the same reason run_tests.sh splits the test suites).
+#
+# Three tiers:
+#   1. Security — `fail-on` below. Any one of these fails the run, whatever the score.
+#   2. Quality & readability — everything else that is enabled. Reported; counts toward the score.
+#   3. Enforcement for tier 2 — a score ratchet. run_lint.sh passes each app's --fail-under, so
+#      the score can't go down; raise those numbers as the code is cleaned up.
+#
+# Docstrings are Google style (Args: / Returns: / Raises:), which is also what mkdocstrings
+# renders in docs/.
+
+[MAIN]
+py-version=3.14
+recursive=yes
+jobs=0
+persistent=no
+# C extensions pylint may import to read their members.
+extension-pkg-allow-list=pydantic_core,psycopg2
+
+# Puts lint/ (next to this file) on the path for the dynamic-sql plugin, wherever pylint is run
+# from: ./run_lint.sh, the VS Code extension, or by hand inside the repo.
+init-hook=
+    import os, sys
+    from pylint.config import find_default_config_files
+    rc = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--rcfile=")), None)
+    rc = rc or next(find_default_config_files(), None)
+    if rc: sys.path.append(os.path.join(os.path.dirname(os.path.abspath(rc)), "lint"))
+
+load-plugins=
+    pylint_sql,
+    pylint.extensions.bad_builtin,
+    pylint.extensions.broad_try_clause,
+    pylint.extensions.check_elif,
+    pylint.extensions.code_style,
+    pylint.extensions.comparison_placement,
+    pylint.extensions.confusing_elif,
+    pylint.extensions.consider_refactoring_into_while_condition,
+    pylint.extensions.dict_init_mutate,
+    pylint.extensions.docparams,
+    pylint.extensions.docstyle,
+    pylint.extensions.empty_comment,
+    pylint.extensions.eq_without_hash,
+    pylint.extensions.for_any_all,
+    pylint.extensions.magic_value,
+    pylint.extensions.mccabe,
+    pylint.extensions.no_self_use,
+    pylint.extensions.overlapping_exceptions,
+    pylint.extensions.private_import,
+    pylint.extensions.redefined_loop_name,
+    pylint.extensions.redefined_variable_type,
+    pylint.extensions.set_membership,
+    pylint.extensions.typing
+
+# ── Tier 1: security. Any of these fails the run. ────────────────────────────────────────
+# E and F are whole categories (real errors, crashes); the rest are the warnings that hide
+# failures, run code from strings, leak resources, or depend on platform defaults.
+fail-on=
+    E,
+    F,
+    eval-used,
+    exec-used,
+    bad-builtin,
+    bare-except,
+    broad-exception-caught,
+    try-except-raise,
+    lost-exception,
+    raise-missing-from,
+    dangerous-default-value,
+    subprocess-run-check,
+    subprocess-popen-preexec-fn,
+    unspecified-encoding,
+    consider-using-with,
+    global-statement,
+    undefined-loop-variable,
+    deprecated-module,
+    # lint/pylint_sql.py: SQL built at runtime instead of a literal with bound parameters.
+    dynamic-sql
+
+# Default ratchet if pylint is run by hand; run_lint.sh passes a per-app value.
+fail-under=0
+
+[MESSAGES CONTROL]
+disable=
+    # Pydantic models and small config classes are legitimately method-less.
+    too-few-public-methods,
+    # Opinionated: walrus everywhere it would fit is not a readability win.
+    consider-using-assignment-expr,
+    # TODOs are listed by a separate pass in run_lint.sh, not counted against the score.
+    fixme
+
+[REPORTS]
+output-format=colorized
+reports=no
+score=yes
+
+# ── Security-tier settings ────────────────────────────────────────────────────────────────
+[DEPRECATED_BUILTINS]
+# bad-builtin: builtins that run strings as code, or read a terminal in server code.
+bad-functions=eval,exec,compile,__import__,input
+
+[TYPECHECK]
+# psycopg2 creates its error classes (UniqueViolation, ...) at import time.
+generated-members=psycopg2.errors.*
+
+[IMPORTS]
+# deprecated-module: unsafe deserialisers (and telnetlib, removed in 3.13).
+deprecated-modules=pickle,cPickle,marshal,shelve,telnetlib
+
+# ── Tier 2: quality & readability ─────────────────────────────────────────────────────────
+[FORMAT]
+max-line-length=100
+max-module-lines=1000
+
+[DESIGN]
+max-args=6
+max-positional-arguments=6
+max-locals=15
+max-branches=12
+max-statements=50
+max-returns=6
+max-nested-blocks=4
+max-attributes=10
+max-bool-expr=5
+# mccabe extension
+max-complexity=10
+# broad_try_clause extension: statements allowed inside one `try`.
+max-try-statements=5
+
+[BASIC]
+good-names=i,j,k,_,db,r,s,v,p,d,t,e,f,ip,tz,id,ok
+include-naming-hint=yes
+
+[SIMILARITIES]
+min-similarity-lines=8
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes
+
+[PARAMETER_DOCUMENTATION]
+# docparams: Google style. A docstring with no Args:/Returns:/Raises: section is accepted (short
+# helpers don't need boilerplate), but one that documents parameters must document all of
+# them, and a Raises: section must match what the function raises.
+default-docstring-type=google
+accept-no-param-doc=yes
+accept-no-raise-doc=yes
+accept-no-return-doc=yes
+accept-no-yields-doc=yes
+
+[MAGIC-VALUE]
+valid-magic-values=0,1,-1,,__main__,utf-8
+
+[TYPING]
+runtime-typing=no

@@ -1,0 +1,113 @@
+site_name: BSides Charm Volunteer Scheduler
+site_description: Developer, operator and organizer documentation, and the export API reference
+site_dir: site
+docs_dir: docs
+# Published per release with mike: /1.0/, /1.1/ and /latest/ (docs/operations/releasing.md).
+site_url: https://securgeek.github.io/volunteer-manager/
+repo_url: https://github.com/securgeek/volunteer-manager
+repo_name: securgeek/volunteer-manager
+
+# The generator scripts live in docs/ beside the pages they make; don't publish them.
+exclude_docs: |
+  *.py
+  __pycache__/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+
+# Fills in the export API reference from backend/routers/export.py and writes
+# site/export-api.md. See the hook's docstring.
+hooks:
+  - docs/gen_export_api.py
+  # Fills in the Security pages: the SBOM from docs/security/sbom/ (tools/sbom.sh writes it)
+  # and a bandit run over every app. See the hook's docstring.
+  - docs/gen_security.py
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          # Repo root, so backend/ and portal/ load as namespace packages: backend.db and
+          # portal.db, not two modules both called db.
+          paths: [.]
+          options:
+            docstring_style: google
+            docstring_options:
+              # Returns: sections without a return annotation are fine (as in pylint's
+              # accept-no-return-doc). Every other docstring warning still fails --strict.
+              warn_missing_types: false
+            members_order: source
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: true
+            show_signature_annotations: true
+            show_if_no_docstring: false
+            filters: ["!^_"]
+            merge_init_into_class: true
+
+markdown_extensions:
+  - tables
+  - attr_list
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  # ```mermaid blocks render as diagrams (Material loads mermaid.js in the browser).
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Organizer guide: guides/organizer.md
+  - Operations:
+      - Deployment: operations/deployment.md
+      - Configuration: operations/configuration.md
+      - Secrets and keys: operations/secrets.md
+      - Graph mail setup: operations/graph-mail-setup.md
+      - Releasing: operations/releasing.md
+  - Services:
+      - Backend: services/backend.md
+      - Portal: services/portal.md
+      - Frontend: services/frontend.md
+      - Mail relay: services/mailrelay.md
+      - vol_mail: services/vol_mail.md
+  - Export API: api/export.md
+  - Interaction diagrams: architecture/interactions.md
+  - Security:
+      - Overview: security/index.md
+      - SBOM and vulnerabilities: security/sbom.md
+      - Bandit results: security/bandit.md
+  - Quality & security: development/quality-and-security.md
+  - Code reference: reference/
+
+# The version menu in the header, filled in from the versions mike has published.
+extra:
+  version:
+    provider: mike
+    default: latest

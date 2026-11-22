@@ -1,0 +1,83 @@
+/* The volunteer-facing pages (/ and /apply/*) wear bsidescharm.org's look; the organizer app
+   keeps Noir dark. index.html and router.js put `bsc-portal` on <html> for those routes (and
+   `dark-app` for the rest), so PrimeVue overlays teleported to <body> are themed too.
+
+   Taken from the conference site (WordPress, Astra theme):
+     primary #0274be (buttons, links), button hover #3a3a3a, text #4B4F58, headings #3a3a3a,
+     header bar #f6f6f6, title band #4B4F58, panels #F2F5F7, footer #3a3a3a;
+     Montserrat 600 for headings, Source Sans Pro 400 at 17px for body text.
+
+   PrimeVue emits its tokens on :root; html.bsc-portal is more specific, so these win. Its
+   component tokens are var() references to these semantic ones, so buttons, focus rings,
+   checkboxes and radios all follow. */
+
+html.bsc-portal {
+  --bsc-blue:      #0274be;
+  --bsc-ink:       #4b4f58;
+  --bsc-heading:   #3a3a3a;
+  --bsc-header-bg: #f6f6f6;
+  --bsc-band-bg:   #4b4f58;
+  --bsc-band-ink:  #f2f5f7;
+  --bsc-panel-bg:  #f2f5f7;
+  --bsc-footer-bg: #3a3a3a;
+  --bsc-heading-font: 'Montserrat', sans-serif;
+  --bsc-body-font:    'Source Sans 3', 'Source Sans Pro', sans-serif;
+
+  --p-primary-50:  #eef7fd;
+  --p-primary-100: #d5ebf9;
+  --p-primary-200: #aed7f3;
+  --p-primary-300: #7bbde9;
+  --p-primary-400: #3f9bdb;
+  --p-primary-500: #0274be;
+  --p-primary-600: #0266a8;
+  --p-primary-700: #03568c;
+  --p-primary-800: #074873;
+  --p-primary-900: #0a3c5f;
+  --p-primary-950: #06263d;
+  --p-primary-color:          var(--bsc-blue);
+  --p-primary-contrast-color: #ffffff;
+  --p-primary-hover-color:    var(--bsc-heading);
+  --p-primary-active-color:   var(--bsc-heading);
+  --p-highlight-background:       var(--p-primary-100);
+  --p-highlight-focus-background: var(--p-primary-200);
+  --p-highlight-color:            var(--p-primary-800);
+  --p-highlight-focus-color:      var(--p-primary-900);
+  --p-text-color:        var(--bsc-ink);
+  --p-text-muted-color:  #646973;
+  --p-content-background: #ffffff;
+
+  color-scheme: light;
+  background: #ffffff;
+}
+
+html.bsc-portal body {
+  margin: 0;
+  background: #ffffff;
+  color: var(--bsc-ink);
+  font-family: var(--bsc-body-font);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* main.css boxes #app in for the organizer app; the portal's header, band and footer run
+   edge to edge instead. */
+html.bsc-portal #app {
+  max-width: none;
+  padding: 0;
+}
+
+html.bsc-portal :is(h1, h2, h3, h4) {
+  font-family: var(--bsc-heading-font);
+  font-weight: 600;
+  color: var(--bsc-heading);
+  line-height: 1.15;
+}
+
+html.bsc-portal a {
+  color: var(--bsc-blue);
+}
+
+html.bsc-portal .p-button {
+  border-radius: 3px;
+  font-weight: 600;
+}

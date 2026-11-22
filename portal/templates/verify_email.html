@@ -1,0 +1,14 @@
+<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:32rem;line-height:1.55">
+  <h2 style="margin:0 0 1rem">{{ app_title }}</h2>
+  <p>Use the button below to {{ verb }}. You'll be asked to confirm before anything happens.</p>
+  <p style="margin:1.5rem 0">
+    <a href="{{ link }}"
+       style="background:#18181b;color:#fff;padding:0.7rem 1.4rem;border-radius:6px;
+              text-decoration:none;display:inline-block">Continue</a>
+  </p>
+  <p style="font-size:0.85rem;color:#52525b">
+    This link works once and expires in {{ ttl }} minutes. If you didn't ask for it, you can
+    ignore this message &mdash; nothing has been changed and no account was created.
+  </p>
+  <p style="font-size:0.75rem;color:#71717a;word-break:break-all">{{ link }}</p>
+</div>

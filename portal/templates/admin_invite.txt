@@ -1,0 +1,9 @@
+{{ app_title }}
+
+{{ inviter }} has invited you to help run {{ app_title }} as {{ role }}. Use the link below to
+set up your account: you'll choose a username and password.
+
+{{ link }}
+
+This link works once and expires in {{ hours }} hours. If you weren't expecting it, you can
+ignore this message.

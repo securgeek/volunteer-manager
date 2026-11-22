@@ -1,0 +1,7 @@
+# Pinned to the current stable major version, as backend/requirements.txt explains.
+fastapi>=0.165,<1
+uvicorn[standard]>=0.54,<1
+python-multipart>=0.0.34,<1
+cryptography>=50.0,<51     # RSA-OAEP for email_enc; no other crypto dependency
+jinja2>=3.1.6,<4           # organizer-edited templates, rendered in the sandbox (content.py)
+markdown-it-py>=4.3,<5     # the landing page's Markdown, raw HTML off (content.py)

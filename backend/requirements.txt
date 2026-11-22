@@ -1,0 +1,19 @@
+# Pinned to the current stable major version: at least the release tested, below the next
+# major (below 1 for a 0.x package, as in requirements-dev.txt). Raise a floor when you test
+# a newer release; change a ceiling only after reading that major version's changelog.
+# Every package here must ship a musllinux wheel for the Alpine image (root CLAUDE.md → Images).
+fastapi>=0.165,<1
+uvicorn[standard]>=0.54,<1
+argon2-cffi>=25.1,<26
+python-multipart>=0.0.34,<1
+itsdangerous>=2.2,<3       # required by starlette SessionMiddleware for cookie signing
+sse-starlette>=3.7,<4
+psycopg2-binary>=2.9.13,<3
+httpx>=0.28.1,<1           # portal sync client (async HTTP)
+webauthn>=3.0.1,<4         # passkeys (routers/passkeys.py); needs cryptography>=49 for ML-DSA
+cryptography>=50.0,<51     # ML-DSA passkeys need >= 49; webauthn pulls it in, pinned here
+tzdata>=2026.6             # zoneinfo data for the event timezone; the Alpine image has none.
+                           # Calendar-versioned with no breaking changes: floor only.
+markdown-it-py>=4.3,<5     # schedule email template: Markdown → HTML (email_render.py, portal_content.py)
+jinja2>=3.1.6,<4           # the portal content templates' checks and previews (portal_content.py)
+segno>=1.6.6,<2            # QR check-in codes in the email preview (pure Python)
