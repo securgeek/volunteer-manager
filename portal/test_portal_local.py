@@ -293,6 +293,20 @@ def test_request_link_generic_copy_when_disclosure_is_off(app_env, client):
     assert r.json()["sent"] is True and "known" not in r.json()
 
 
+@pytest.mark.parametrize("t", [
+    '"><script>alert(1)</script>', "abc' onmouseover='x", "</form><img src=x onerror=alert(1)>",
+    "a" * 300, "short",
+])
+def test_the_verify_page_never_reflects_anything_but_a_token(client, t):
+    """CodeQL #10: ?t= used to go into the page's HTML unescaped."""
+    import urllib.parse
+    page = client.get("/api/portal/verify?t=" + urllib.parse.quote(t))
+    assert page.status_code == 200
+    assert "<script>" not in page.text and "onerror" not in page.text
+    assert "onmouseover" not in page.text and t not in page.text
+    assert "missing its token" in page.text and "<form" not in page.text
+
+
 def test_full_login_flow_get_then_post(app_env, client):
     _add_volunteer(app_env)
     assert client.post("/api/portal/request_link",
@@ -302,6 +316,7 @@ def test_full_login_flow_get_then_post(app_env, client):
     # The GET must render a confirmation and consume nothing: scanners fetch URLs.
     page = client.get(f"/api/portal/verify?t={token}")
     assert page.status_code == 200 and "Confirm sign-in" in page.text
+    assert f'name="t" value="{token}"' in page.text            # a real token still works
     conn = _conn(app_env)
     assert conn.execute("SELECT used_at FROM login_tokens").fetchone()["used_at"] is None
     conn.close()
@@ -918,3 +933,43 @@ def test_audit_log_records_actions_not_addresses(app_env, client):
     assert rows, "expected an audit entry"
     blob = " ".join(f"{r['action']} {r['detail']} {r['actor_vol_id']}" for r in rows)
     assert "jim@example.com" not in blob and "@" not in blob
+
+
+# ── regular expressions on outside input (CodeQL #4, #5, #6) ──────────────────
+
+_ADDRESSES = {
+    "jim@example.com": True, "first.last+tag@sub.example.co.uk": True, "a@b.c": True,
+    "no-at.example.com": False, "two@@example.com": False, "a@nodot": False,
+    "a@.example.com": False, "a@example..com": False, "a@example.com.": False,
+    "sp ace@example.com": False, "a@exa mple.com": False,
+}
+
+
+def test_the_address_patterns_accept_what_they_should(app_env):  # app_env: the settings routers import
+    from routers import signup, sync
+    for pattern in (signup._EMAIL, sync._ADDR):
+        for addr, ok in _ADDRESSES.items():
+            assert bool(pattern.match(addr)) is ok, (pattern.pattern, addr)
+
+
+def test_the_branding_link_pattern_accepts_what_it_should(app_env):  # app_env: the settings routers import
+    from routers import sync
+    for link, ok in {"https://example.org": True, "https://example.org/coc?x=1#y": True,
+                     "http://example.org?q": True, "https://": False, "https:///x": False,
+                     "https://a b.org": False, "javascript:alert(1)": False,
+                     "//evil.example": False}.items():
+        assert bool(sync._PUBLIC_LINK.match(link)) is ok, link
+
+
+def test_the_patterns_stay_fast_on_their_worst_inputs(app_env):  # app_env: the settings routers import
+    import time
+    from routers import signup, sync
+    worst = ["a@" + "." * 5000 + "@", "a@" + "a." * 5000 + "!", "a@" + "a" * 10000 + "!"]
+    links = ["https://" + "a" * 10000 + " ", "https://" + "a/" * 5000 + " "]
+    started = time.perf_counter()
+    for text in worst:
+        signup._EMAIL.match(text)
+        sync._ADDR.match(text)
+    for text in links:
+        sync._PUBLIC_LINK.match(text)
+    assert time.perf_counter() - started < 0.5

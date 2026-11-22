@@ -111,6 +111,9 @@ def test_schedule_import_keeps_the_rows_around_a_bad_one(app):
     body = _upload(_organizer(app), "/api/setup/import_schedule", SCHEDULE_CSV).json()
     assert body["inserted_slots"] == 2 and body["skipped"] == 1
     assert len(body["errors"]) == 1 and "Row 3" in body["errors"][0]
+    # A reason in words, not the database's message (CodeQL #8, #9).
+    assert "rejected by test trigger" not in body["errors"][0]
+    assert body["errors"][0].endswith("it couldn't be saved")
     saved = {r[0] for r in _sql("SELECT pos_key FROM schedule")}
     assert saved == {"reg1", "reg2"}
 

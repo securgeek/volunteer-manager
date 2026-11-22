@@ -8,6 +8,7 @@ its own savepoint, so a bad row is reported and skipped while the rest are kept.
 App Settings live here too: the site title, the event timezone, and the two logos, which are
 stored as data URLs in `app_kv` and pushed to the portal for the volunteer pages.
 """
+import logging
 import uuid
 import base64
 import re
@@ -19,12 +20,43 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import psycopg2
+from psycopg2 import errorcodes
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, UploadFile, File
 
 from checkin_codes import DEFAULT_TZ
 from db import get_db, get_session_data, RoleChecker, audit, _session_cache, PgClient
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+# A CSV row's database error, in words for the organizer, by SQLSTATE. The raw message can
+# carry constraint names and the values involved, so it goes to the server log, not the
+# reply (CodeQL #8, #9).
+_ROW_PROBLEMS = {
+    errorcodes.UNIQUE_VIOLATION: "it duplicates an existing entry",
+    errorcodes.FOREIGN_KEY_VIOLATION: "it refers to something that doesn't exist",
+    errorcodes.NOT_NULL_VIOLATION: "a required column is empty",
+    errorcodes.STRING_DATA_RIGHT_TRUNCATION: "a value is too long",
+    errorcodes.CHECK_VIOLATION: "a value isn't allowed",
+    errorcodes.INVALID_TEXT_REPRESENTATION: "a value is the wrong type",
+    errorcodes.INVALID_DATETIME_FORMAT: "a date isn't valid (use YYYY-MM-DD)",
+    errorcodes.DATETIME_FIELD_OVERFLOW: "a date isn't valid (use YYYY-MM-DD)",
+}
+
+
+def _row_problem(exc: psycopg2.Error, what: str) -> str:
+    """Say why a CSV row wasn't saved, without the database's own message.
+
+    Args:
+        exc: The error the row's statements raised.
+        what: Which row, for the log line, e.g. ``schedule row 3``.
+
+    Returns:
+        A short reason, such as "a value is too long".
+    """
+    log.warning("CSV import: %s not saved (SQLSTATE %s): %s", what, exc.pgcode,
+                exc.diag.message_primary if exc.diag else exc)
+    return _ROW_PROBLEMS.get(exc.pgcode, "it couldn't be saved")
 
 
 @contextmanager
@@ -219,7 +251,8 @@ def setup_import_schedule(
                     (day_key, time_key, pos_key)
                 )
         except psycopg2.Error as e:
-            errors.append(f"Row {row_num} ({day_key}/{time_key}/{pos_key}): {e}")
+            errors.append(f"Row {row_num} ({day_key}/{time_key}/{pos_key}): "
+                          f"{_row_problem(e, f'schedule row {row_num}')}")
             skipped += 1
             continue
         # Only once the row is saved: a rolled-back row's day must still be inserted by the
@@ -315,7 +348,8 @@ def setup_import_volunteers(
                 )
             inserted += 1
         except psycopg2.Error as e:
-            errors.append(f"Row {row_num} (id={vol_id}): {e}")
+            errors.append(f"Row {row_num} (id={vol_id}): "
+                          f"{_row_problem(e, f'volunteer row {row_num}')}")
             skipped += 1
 
     db.commit()
