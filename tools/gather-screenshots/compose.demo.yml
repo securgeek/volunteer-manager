@@ -1,0 +1,11 @@
+# Layered over compose.yml by gather-screenshots.sh, for the throwaway demo stack only.
+#
+# The demo signs up a dozen fake volunteers from one address in a few seconds, which the
+# portal's per-IP limits (5 a minute, 30 an hour) would refuse. compose.yml doesn't pass these
+# settings through, so they're set here. Never use this file for a real deployment.
+services:
+  portal:
+    environment:
+      PORTAL_RATE_PER_MIN: "1000"
+      PORTAL_RATE_PER_HOUR: "10000"
+      PORTAL_RESPONSE_FLOOR_MS: "0"

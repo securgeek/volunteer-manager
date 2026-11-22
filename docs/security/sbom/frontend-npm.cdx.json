@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:d420a12f-a943-4c69-9ef6-60b8ab636d38",
+  "serialNumber": "urn:uuid:12dde555-1574-411c-a1e3-e4e9472bb968",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-22T02:44:49+00:00",
+    "timestamp": "2026-11-22T23:34:45+00:00",
     "tools": {
       "components": [
         {
@@ -20,7 +20,7 @@
       ]
     },
     "component": {
-      "bom-ref": "7b56380c-6ad5-4391-a02a-05170888ef49",
+      "bom-ref": "be99f059-cb91-454a-8f46-b7b042bcbf4d",
       "type": "application",
       "name": "frontend/package-lock.json",
       "properties": [
@@ -33,7 +33,7 @@
   },
   "components": [
     {
-      "bom-ref": "d9a79e13-11d5-4416-a55b-746607ec3981",
+      "bom-ref": "4061edad-073a-4176-9b49-91b69c6c606b",
       "type": "application",
       "name": "package-lock.json",
       "properties": [
@@ -1060,13 +1060,7 @@
   ],
   "dependencies": [
     {
-      "ref": "7b56380c-6ad5-4391-a02a-05170888ef49",
-      "dependsOn": [
-        "d9a79e13-11d5-4416-a55b-746607ec3981"
-      ]
-    },
-    {
-      "ref": "d9a79e13-11d5-4416-a55b-746607ec3981",
+      "ref": "4061edad-073a-4176-9b49-91b69c6c606b",
       "dependsOn": [
         "pkg:npm/%40fontsource/montserrat@5.3.0",
         "pkg:npm/%40fontsource/source-sans-3@5.3.1",
@@ -1079,6 +1073,12 @@
         "pkg:npm/primevue@4.5.5",
         "pkg:npm/vue-router@4.6.5",
         "pkg:npm/vue@3.5.46"
+      ]
+    },
+    {
+      "ref": "be99f059-cb91-454a-8f46-b7b042bcbf4d",
+      "dependsOn": [
+        "4061edad-073a-4176-9b49-91b69c6c606b"
       ]
     },
     {

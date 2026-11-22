@@ -19,6 +19,7 @@ BSides/
 │   ├── vite.config.js
 │   └── Dockerfile
 ├── tools/vol_mail/   ← Standalone schedule mailer, run on an organizer's machine (no container)
+├── tools/gather-screenshots/ ← Retakes the README screenshots on a throwaway demo stack (bsides-demo, ports 18080/18082)
 ├── docs/             ← MkDocs site: getting started, organizer guide, operations, services, export API, diagrams, quality & security, code reference
 ├── plans/            ← Working plans (gitignored, never synced)
 ├── compose.yml       ← Builds both services, backend_data volume

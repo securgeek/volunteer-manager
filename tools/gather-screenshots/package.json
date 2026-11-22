@@ -1,0 +1,10 @@
+{
+  "name": "gather-screenshots",
+  "private": true,
+  "description": "Retakes the README screenshots on a throwaway demo stack. See README.md.",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

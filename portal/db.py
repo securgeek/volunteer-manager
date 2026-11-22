@@ -226,7 +226,7 @@ def configure(db_path: str) -> None:
     """Set the database path used by get_db, and migrate it once at startup.
 
     Args:
-        db_path: The SQLite file, from `PORTAL_DB_PATH`.
+        db_path: The SQLite file, from `PORTAL_DB` (`settings.db_path`).
     """
     _config.path = db_path
     conn = connect(db_path)

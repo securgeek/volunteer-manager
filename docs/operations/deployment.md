@@ -10,19 +10,20 @@ and the less routine jobs: the first install, upgrading PostgreSQL and backups.
 flowchart LR
     v([Volunteers]) --> cf[Edge<br/>TLS]
     o([Organizers]) --> cfa[Access gate] --> cf
+    i([Integrators and<br/>tools/vol_mail]) -.->|"/api/export/*<br/>bypasses the gate, bearer key"| cf
     cf --> cfd[Tunnel client<br/>on the host]
     subgraph host [Host: podman-compose]
         cfd -->|127.0.0.1:8082| fe8082[frontend nginx<br/>public pages]
         cfd -->|127.0.0.1:8080| fe8080[frontend nginx<br/>full site]
         fe8082 -->|/api/portal/*| portal
         fe8080 -->|/api/portal/*| portal
-        fe8080 -->|/api/*| backend
+        fe8080 -->|"/api/* (incl. /api/export/*)"| backend
         backend --> postgres[(postgres)]
         backend -->|signed sync API| portal
         portal --> pdb[(portal.db)]
         portal -->|mail_internal| mailrelay
     end
-    mailrelay -->|mail_egress| graph[Microsoft Graph]
+    mailrelay -->|mail_egress| msgraph[Microsoft Graph]
 ```
 
 | Hostname | Host port | Serves | Gate |
