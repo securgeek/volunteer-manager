@@ -413,6 +413,11 @@ async def push_volunteers(body: bytes = Depends(verified_body),
     return result
 
 
+# The host, then nothing or a path, query or fragment. The host can't contain the character
+# that starts the rest, so the match can't backtrack (CodeQL #5). Same links as before.
+_PUBLIC_LINK = re.compile(r"^https?://[^\s/?#]+(?:[/?#]\S*)?$")
+
+
 def _public_link(raw: Any, what: str) -> Optional[str]:
     """Check a pushed link before the volunteer pages show it.
 
@@ -432,7 +437,7 @@ def _public_link(raw: Any, what: str) -> Optional[str]:
     if raw in (None, ""):
         return None
     if (not isinstance(raw, str) or len(raw) > MAX_BRANDING_TEXT
-            or not re.match(r"^https?://[^\s/?#]+[^\s]*$", raw)):
+            or not _PUBLIC_LINK.match(raw)):
         raise HTTPException(status_code=400, detail=f"{what} must be an http(s) link")
     return raw
 
@@ -717,7 +722,10 @@ ADMIN_MAIL_PER_HOUR = 20
 # Their own allowance, so a batch can't starve admin mail, and below the relay's 300 an hour
 # (shared with every sign-in link) so volunteers can still get theirs mid-batch.
 SIGNUP_INVITE_MAIL_PER_HOUR = 200
-_ADDR = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The domain is dot-separated labels, each without a dot, so the match can't backtrack (a
+# domain part of [^@\s]+\.[^@\s]+ could, quadratically: CodeQL #3, #4, #6). It also refuses an
+# empty label, as in a@.b or a@b..c, which were never deliverable anyway.
+_ADDR = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 # The branding's contact address: one plain address, as the scheduler checks it too.
 _CONTACT_ADDR = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")

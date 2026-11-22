@@ -173,7 +173,8 @@ def test_without_an_address_nothing_is_mailed(app, sent):
 def test_a_failed_mail_still_leaves_a_usable_invite(app, sent):
     sent.fake.fail = "portal unreachable"
     out = _invite(app, email="x@example.com")
-    assert out["emailed"] is False and "portal unreachable" in out["email_error"]
+    assert out["emailed"] is False and "couldn't be sent" in out["email_error"]
+    assert "portal unreachable" not in out["email_error"]       # the detail is logged, not shown
     assert _client(app).get("/api/invites/check",
                             params={"t": _token(out["link"])}).json()["valid"]
 

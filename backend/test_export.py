@@ -803,3 +803,26 @@ def test_content_is_pushed_as_saved_and_hashed():
     assert b["invite"] == {"subject": "S", "body": "{{ link }}"}
     assert b["content_hash"] != a["content_hash"]
 
+
+
+def test_the_invite_address_pattern_is_linear_and_unchanged_for_real_addresses():
+    """CodeQL #3: routers/invites.EMAIL could backtrack quadratically."""
+    import time
+    from routers import invites
+    for addr, ok in {"jim@example.com": True, "a+b@sub.example.org": True, "a@nodot": False,
+                     "a@.x.org": False, "a@x..org": False, "a b@x.org": False}.items():
+        assert bool(invites.EMAIL.match(addr)) is ok, addr
+    started = time.perf_counter()
+    for text in ("a@" + "." * 5000 + "@", "a@" + "a." * 5000 + "!"):
+        invites.EMAIL.match(text)
+    assert time.perf_counter() - started < 0.5
+
+
+def test_plain_text_email_images_are_bounded():
+    """CodeQL #2: a template full of unclosed '![' mustn't make _text quadratic."""
+    import time
+    import email_render
+    assert email_render._text("![Logo](asset:logo.png) Hi") == "Logo Hi\n"
+    started = time.perf_counter()
+    email_render._text("![" * 25_000)
+    assert time.perf_counter() - started < 1.0
