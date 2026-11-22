@@ -26,6 +26,106 @@ emails are all set from the admin site, not in the code.
   organizers hold offline. The internet-facing portal is a separate application with its own
   database, and can't read them.
 
+## For organizers
+
+The organizer app, from a fresh install to a staffed schedule. The screenshots come from a demo
+with invented data; [`tools/gather-screenshots`](tools/gather-screenshots/) retakes them.
+
+### Conference setup
+
+A fresh install opens a setup wizard. After the first organizer account, it asks for the
+conference's name and how volunteers can reach the organizers, then its logo. All of it shows
+on the public volunteer pages and can be changed later in App Settings.
+
+![The setup wizard's conference details step](docs/images/screenshots/setup-conference.png)
+
+### Schedule creation
+
+The schedule builder steps through days, position categories and shift times, then a grid of
+how many of each position every shift needs. Categories are numbered (Security 1, 2, 3 …) or
+take a list of names, and each day can run its own set of times.
+
+**Categories**
+
+![Categories, with chip colors and a named Room Monitor list](docs/images/screenshots/setup-categories.png)
+
+**Times**
+
+![Shift times, ticked per day](docs/images/screenshots/setup-times.png)
+
+![The positions grid: how many of each category per shift](docs/images/screenshots/setup-positions.png)
+
+### Volunteer approval
+
+Signups arrive from the volunteer portal as pending, with their shift picks and answers.
+Approving can give a volunteer their badge number as their ID. The Volunteers tab lists
+everyone by state, with what they asked for and how many shifts they hold.
+
+![Signups awaiting approval](docs/images/screenshots/approve-pending.png)
+
+![The volunteer list](docs/images/screenshots/volunteer-list.png)
+
+### Schedule assignments
+
+The Schedule tab shows every position by day and shift, colored by category. Opening an empty
+slot offers the volunteers who asked for that shift first, then flexible and available ones,
+leaving out anyone already working an overlapping shift.
+
+![The schedule for one shift](docs/images/screenshots/schedule.png)
+
+![Assigning a volunteer to an empty slot](docs/images/screenshots/assign-slot.png)
+
+## For volunteers
+
+The public side, on its own hostname: a call for volunteers, then sign-up and sign-in by
+emailed link, with no passwords.
+
+![The call for volunteers](docs/images/screenshots/portal-landing.png)
+
+### Signing in
+
+A volunteer enters their address and gets a one-time link. Opening the link changes nothing
+until they press Sign in, so mail scanners that follow links can't use it up.
+
+| Ask for a link | Check your email | Confirm |
+|---|---|---|
+| ![Sign in with an email address](docs/images/screenshots/portal-sign-in.png) | ![The check-your-email step](docs/images/screenshots/portal-check-email.png) | ![Confirming the sign-in link](docs/images/screenshots/portal-confirm.png) |
+
+### The signup questionnaire
+
+New volunteers give their name, pick two shifts that don't overlap (with space left shown for
+each), say when else they could help, and answer the organizers' questions. The questions are
+edited on the admin site.
+
+<table>
+  <tr>
+    <th>About you</th>
+    <th>Shifts</th>
+    <th>More questions</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/screenshots/portal-signup-about.png" alt="Name and handle"></td>
+    <td valign="top"><img src="docs/images/screenshots/portal-signup-shifts.png" alt="Picking two shifts, extra availability and the first questions"></td>
+    <td valign="top"><img src="docs/images/screenshots/portal-signup-questions.png" alt="T-shirt, dinner and dietary questions"></td>
+  </tr>
+</table>
+
+### Changing a registration
+
+Signed in, volunteers see their status and scheduled shifts, and can change their shifts and
+editable answers, or cancel.
+
+<table>
+  <tr>
+    <th>My info</th>
+    <th>Editing</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/screenshots/portal-my-info.png" alt="A volunteer's status, shifts and details"></td>
+    <td valign="top"><img src="docs/images/screenshots/portal-edit.png" alt="Changing shifts and details"></td>
+  </tr>
+</table>
+
 ## How it's built
 
 | Part | What it is |

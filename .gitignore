@@ -22,6 +22,7 @@ api_key*
 # Build output and dependencies
 frontend/node_modules/
 frontend/dist/
+tools/gather-screenshots/node_modules/
 
 # Runtime data: the audit log, local databases, the mailer's state and packages
 logs/
