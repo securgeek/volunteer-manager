@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:09f4b309-0086-4ff1-986f-b99e6d81bb5d",
+  "serialNumber": "urn:uuid:dfad4155-43fe-427d-85e8-95f380fa7386",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-22T02:44:49+00:00",
+    "timestamp": "2026-11-22T23:34:45+00:00",
     "tools": {
       "components": [
         {
@@ -20,14 +20,18 @@
       ]
     },
     "component": {
-      "bom-ref": "pkg:oci/bsides_frontend@sha256:37706cf07a9a6fe70f7cb010d378b67c61a38be094db1871d5fb98bf17a87c8e?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
+      "bom-ref": "pkg:oci/bsides_frontend@sha256:2f50738d37ce8ab10be00688b12c8b9b4b1c2e104177031ec5c2811d5b8d006a?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
       "type": "container",
       "name": "localhost/bsides_frontend:latest",
-      "purl": "pkg:oci/bsides_frontend@sha256:37706cf07a9a6fe70f7cb010d378b67c61a38be094db1871d5fb98bf17a87c8e?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
+      "purl": "pkg:oci/bsides_frontend@sha256:2f50738d37ce8ab10be00688b12c8b9b4b1c2e104177031ec5c2811d5b8d006a?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:26c6251fd236202b3eb54fd1639a59779543adf0f6bb1ba54e7693b6a7ef3af9"
+          "value": "sha256:164acdb1ea565e1f720b621601d1b994514efc2f776a59191317052fc59ddebf"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:2d1bc1a005370a54c26f174775d273623efd8d7acd318b446e86eebcb0473832"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -43,6 +47,10 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:441c4575bb9792a7d23977a67035d632112d9aba3f472a0e785788f54afeef70"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:73884487472cb5d5453348edd7f004ddde6570cc26ba05a562d65befb511cbeb"
         },
         {
@@ -51,11 +59,7 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:792e407835f002ac84c94e1595ec5c5a33748e360561b2be51d5ea2c56ecd438"
-        },
-        {
-          "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:87171f23912680b70a5cfaa885bcb35667c749d0d65f62679012f7abe5ae6f28"
+          "value": "sha256:8a9edee5749cc576bc4a4d71cebce8a323e43d8af11e4ca34df3eb3747fc6c71"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -67,15 +71,11 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:ef8464e46028cf77f482fdc9724ce4afdbf52f8de80db6cd97af09cdc288e182"
-        },
-        {
-          "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:fe95f42d27827e8e08ae9fd84052d16b69c94c8fd71f3809637887fd08e70c94"
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:c370995373d16b7cb28e9e1a2bb0289abf110ce517d5576038f98a56aa66fe78"
+          "value": "sha256:0609bb9620121b3692a2df0a86cf233a60ad304741ebb543641dc54ef53552c4"
         },
         {
           "name": "aquasecurity:trivy:Labels:io.buildah.version",
@@ -91,7 +91,7 @@
         },
         {
           "name": "aquasecurity:trivy:RepoDigest",
-          "value": "localhost/bsides_frontend@sha256:37706cf07a9a6fe70f7cb010d378b67c61a38be094db1871d5fb98bf17a87c8e"
+          "value": "localhost/bsides_frontend@sha256:2f50738d37ce8ab10be00688b12c8b9b4b1c2e104177031ec5c2811d5b8d006a"
         },
         {
           "name": "aquasecurity:trivy:RepoTag",
@@ -103,14 +103,14 @@
         },
         {
           "name": "aquasecurity:trivy:Size",
-          "value": "78162944"
+          "value": "78210048"
         }
       ]
     }
   },
   "components": [
     {
-      "bom-ref": "71762dde-2a9b-4473-9d0a-15cad24d80c6",
+      "bom-ref": "91bbb4e1-3929-4c1f-9512-da4709d1c68b",
       "type": "operating-system",
       "name": "alpine",
       "version": "3.24.4",
@@ -1125,7 +1125,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:87171f23912680b70a5cfaa885bcb35667c749d0d65f62679012f7abe5ae6f28"
+          "value": "sha256:164acdb1ea565e1f720b621601d1b994514efc2f776a59191317052fc59ddebf"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1980,7 +1980,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:87171f23912680b70a5cfaa885bcb35667c749d0d65f62679012f7abe5ae6f28"
+          "value": "sha256:164acdb1ea565e1f720b621601d1b994514efc2f776a59191317052fc59ddebf"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2440,7 +2440,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:87171f23912680b70a5cfaa885bcb35667c749d0d65f62679012f7abe5ae6f28"
+          "value": "sha256:164acdb1ea565e1f720b621601d1b994514efc2f776a59191317052fc59ddebf"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3470,7 +3470,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:87171f23912680b70a5cfaa885bcb35667c749d0d65f62679012f7abe5ae6f28"
+          "value": "sha256:164acdb1ea565e1f720b621601d1b994514efc2f776a59191317052fc59ddebf"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3543,7 +3543,7 @@
   ],
   "dependencies": [
     {
-      "ref": "71762dde-2a9b-4473-9d0a-15cad24d80c6",
+      "ref": "91bbb4e1-3929-4c1f-9512-da4709d1c68b",
       "dependsOn": [
         "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64&distro=3.24.4",
         "pkg:apk/alpine/alpine-release@3.24.4-r0?arch=x86_64&distro=3.24.4",
@@ -4086,9 +4086,9 @@
       ]
     },
     {
-      "ref": "pkg:oci/bsides_frontend@sha256:37706cf07a9a6fe70f7cb010d378b67c61a38be094db1871d5fb98bf17a87c8e?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
+      "ref": "pkg:oci/bsides_frontend@sha256:2f50738d37ce8ab10be00688b12c8b9b4b1c2e104177031ec5c2811d5b8d006a?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
       "dependsOn": [
-        "71762dde-2a9b-4473-9d0a-15cad24d80c6"
+        "91bbb4e1-3929-4c1f-9512-da4709d1c68b"
       ]
     }
   ],

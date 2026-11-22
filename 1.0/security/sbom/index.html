@@ -2962,7 +2962,7 @@
 
 
 <h1 id="sbom-and-vulnerabilities">SBOM and vulnerabilities<a class="headerlink" href="#sbom-and-vulnerabilities" title="Permanent link">&para;</a></h1>
-<p><strong>SBOM and vulnerabilities as of 2026-11-22 02:44 UTC</strong>, from trivy 0.72.0 with its vulnerability database of 2026-11-21 18:38 UTC. New vulnerabilities are published daily: run <code>tools/sbom.sh</code> again for a current view.</p>
+<p><strong>SBOM and vulnerabilities as of 2026-11-22 23:34 UTC</strong>, from trivy 0.72.0 with its vulnerability database of 2026-11-22 19:00 UTC. New vulnerabilities are published daily: run <code>tools/sbom.sh</code> again for a current view.</p>
 <table>
 <thead>
 <tr>
@@ -2978,7 +2978,7 @@
 <tbody>
 <tr>
 <td><a href="./#backend">Backend image</a></td>
-<td style="text-align: right;">71</td>
+<td style="text-align: right;">73</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
@@ -2987,7 +2987,7 @@
 </tr>
 <tr>
 <td><a href="./#portal">Portal image</a></td>
-<td style="text-align: right;">54</td>
+<td style="text-align: right;">58</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
@@ -3016,8 +3016,8 @@
 <td><a href="./#postgres">PostgreSQL image</a></td>
 <td style="text-align: right;">57</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">56</td>
-<td style="text-align: right;">11</td>
+<td style="text-align: right;">55</td>
+<td style="text-align: right;">12</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">1</td>
 </tr>
@@ -3042,10 +3042,10 @@
 </tbody>
 </table>
 <h2 id="backend">Backend image<a class="headerlink" href="#backend" title="Permanent link">&para;</a></h2>
-<p>From <code>localhost/bsides_backend:latest</code> (22cb6abe11ac, built 2026-11-22 01:17:55 UTC). Base system: alpine 3.24.4.
+<p>From <code>localhost/bsides_backend:latest</code> (5555f488b260, built 2026-11-22 23:33:36 UTC). Base system: alpine 3.24.4.
 CycloneDX file: <a href="backend.cdx.json">backend.cdx.json</a>.</p>
 <p>No known vulnerabilities.</p>
-<p><strong>Components (71)</strong></p>
+<p><strong>Components (73)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3061,6 +3061,18 @@ CycloneDX file: <a href="backend.cdx.json">backend.cdx.json</a>.</p>
 <td>20261105.192804</td>
 <td>alpine</td>
 <td>—</td>
+</tr>
+<tr>
+<td>Jinja2</td>
+<td>3.1.6</td>
+<td>python-pkg</td>
+<td>BSD-3-Clause</td>
+</tr>
+<tr>
+<td>MarkupSafe</td>
+<td>3.0.4</td>
+<td>python-pkg</td>
+<td>BSD-3-Clause</td>
 </tr>
 <tr>
 <td>PyYAML</td>
@@ -3394,7 +3406,7 @@ CycloneDX file: <a href="backend.cdx.json">backend.cdx.json</a>.</p>
 </tr>
 <tr>
 <td>sse-starlette</td>
-<td>3.7.0</td>
+<td>3.7.1</td>
 <td>python-pkg</td>
 <td>BSD-3-Clause</td>
 </tr>
@@ -3485,10 +3497,10 @@ CycloneDX file: <a href="backend.cdx.json">backend.cdx.json</a>.</p>
 </tbody>
 </table>
 <h2 id="portal">Portal image<a class="headerlink" href="#portal" title="Permanent link">&para;</a></h2>
-<p>From <code>localhost/bsides_portal:latest</code> (e205f6008c68, built 2026-11-22 01:17:45 UTC). Base system: alpine 3.24.4.
+<p>From <code>localhost/bsides_portal:latest</code> (bcd1e212cb36, built 2026-11-22 23:33:24 UTC). Base system: alpine 3.24.4.
 CycloneDX file: <a href="portal.cdx.json">portal.cdx.json</a>.</p>
 <p>No known vulnerabilities.</p>
-<p><strong>Components (54)</strong></p>
+<p><strong>Components (58)</strong></p>
 <table>
 <thead>
 <tr>
@@ -3504,6 +3516,18 @@ CycloneDX file: <a href="portal.cdx.json">portal.cdx.json</a>.</p>
 <td>20261105.192804</td>
 <td>alpine</td>
 <td>—</td>
+</tr>
+<tr>
+<td>Jinja2</td>
+<td>3.1.6</td>
+<td>python-pkg</td>
+<td>BSD-3-Clause</td>
+</tr>
+<tr>
+<td>MarkupSafe</td>
+<td>3.0.4</td>
+<td>python-pkg</td>
+<td>BSD-3-Clause</td>
 </tr>
 <tr>
 <td>PyYAML</td>
@@ -3680,6 +3704,18 @@ CycloneDX file: <a href="portal.cdx.json">portal.cdx.json</a>.</p>
 <td>BSD-3-Clause</td>
 </tr>
 <tr>
+<td>markdown-it-py</td>
+<td>4.3.0</td>
+<td>python-pkg</td>
+<td>MIT</td>
+</tr>
+<tr>
+<td>mdurl</td>
+<td>0.1.2</td>
+<td>python-pkg</td>
+<td>MIT</td>
+</tr>
+<tr>
 <td>musl</td>
 <td>1.2.6-r3</td>
 <td>alpine</td>
@@ -3826,7 +3862,7 @@ CycloneDX file: <a href="portal.cdx.json">portal.cdx.json</a>.</p>
 </tbody>
 </table>
 <h2 id="mailrelay">Mail relay image<a class="headerlink" href="#mailrelay" title="Permanent link">&para;</a></h2>
-<p>From <code>localhost/bsides_mailrelay:latest</code> (0e860d73f888, built 2026-11-22 00:32:02 UTC). Base system: alpine 3.24.4.
+<p>From <code>localhost/bsides_mailrelay:latest</code> (f52212bb5e99, built 2026-11-22 23:33:08 UTC). Base system: alpine 3.24.4.
 CycloneDX file: <a href="mailrelay.cdx.json">mailrelay.cdx.json</a>.</p>
 <p>No known vulnerabilities.</p>
 <p><strong>Components (30)</strong></p>
@@ -4023,7 +4059,7 @@ CycloneDX file: <a href="mailrelay.cdx.json">mailrelay.cdx.json</a>.</p>
 </tbody>
 </table>
 <h2 id="frontend">Frontend image (nginx)<a class="headerlink" href="#frontend" title="Permanent link">&para;</a></h2>
-<p>From <code>localhost/bsides_frontend:latest</code> (c370995373d1, built 2026-11-22 00:32:12 UTC). Base system: alpine 3.24.4.
+<p>From <code>localhost/bsides_frontend:latest</code> (0609bb962012, built 2026-11-22 23:33:18 UTC). Base system: alpine 3.24.4.
 CycloneDX file: <a href="frontend.cdx.json">frontend.cdx.json</a>.</p>
 <p>No known vulnerabilities.</p>
 <p><strong>Components (72)</strong></p>
@@ -4789,13 +4825,6 @@ CycloneDX file: <a href="postgres.cdx.json">postgres.cdx.json</a>.</p>
 </tr>
 <tr>
 <td>High</td>
-<td><a href="https://pkg.go.dev/vuln/">CVE-2026-42507</a></td>
-<td>stdlib</td>
-<td>v1.24.6</td>
-<td>Upgrade stdlib to version 1.25.11, 1.26.4</td>
-</tr>
-<tr>
-<td>High</td>
 <td><a href="https://pkg.go.dev/vuln/">CVE-2026-56853</a></td>
 <td>stdlib</td>
 <td>v1.24.6</td>
@@ -4975,6 +5004,13 @@ CycloneDX file: <a href="postgres.cdx.json">postgres.cdx.json</a>.</p>
 <td>libssl3</td>
 <td>3.5.9-r0</td>
 <td>Upgrade libcrypto3 to version 3.5.9-r1; Upgrade libssl3 to version 3.5.9-r1</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><a href="https://pkg.go.dev/vuln/">CVE-2026-42507</a></td>
+<td>stdlib</td>
+<td>v1.24.6</td>
+<td>Upgrade stdlib to version 1.25.11, 1.26.4</td>
 </tr>
 <tr>
 <td>Medium</td>

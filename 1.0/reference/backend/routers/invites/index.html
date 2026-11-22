@@ -3088,16 +3088,16 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">38</span>
 <span class="normal">39</span>
 <span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
-<span class="normal">43</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">token_hash</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">token_hash</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Hash an invite token for storage. Only the hash is kept.</span>
 
 <span class="sd">    Args:</span>
@@ -3183,11 +3183,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">50</span>
 <span class="normal">51</span>
 <span class="normal">52</span>
 <span class="normal">53</span>
@@ -3197,7 +3193,11 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 <span class="normal">57</span>
 <span class="normal">58</span>
 <span class="normal">59</span>
-<span class="normal">60</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">clean_email</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">clean_email</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""A plausible address, lowercased, or None for blank. 400 for anything else.</span>
 
 <span class="sd">    Args:</span>
@@ -3373,11 +3373,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 76</span>
 <span class="normal"> 77</span>
 <span class="normal"> 78</span>
 <span class="normal"> 79</span>
@@ -3428,7 +3424,14 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 <span class="normal">124</span>
 <span class="normal">125</span>
 <span class="normal">126</span>
-<span class="normal">127</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites"</span><span class="p">)</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_invite</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">role</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
@@ -3479,10 +3482,13 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
                 <span class="n">hours</span><span class="o">=</span><span class="n">INVITE_HOURS</span><span class="p">)</span>
             <span class="n">out</span><span class="p">[</span><span class="s2">"emailed"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="c1"># Deliberately broad: a failed mail mustn't undo the invite. The link is still</span>
-        <span class="c1"># usable, and the error goes back to the organizer as email_error.</span>
+        <span class="c1"># usable. The organizer is told it didn't send; the reason (which can carry the</span>
+        <span class="c1"># portal's reply) goes to the server log, not the page (CodeQL #7).</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001  # pylint: disable=broad-exception-caught</span>
-            <span class="n">out</span><span class="p">[</span><span class="s2">"email_error"</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"The invite was created, but the email couldn't be sent "</span> \
-                                 <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">). Copy the link and send it yourself."</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"invite </span><span class="si">%s</span><span class="s2">: mail not sent: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">invite_id</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">"email_error"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"The invite was created, but the email couldn't be sent. "</span>
+                                  <span class="s2">"Copy the link and send it yourself; Admin → Volunteer "</span>
+                                  <span class="s2">"Portal shows any mail problems."</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">out</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -3553,14 +3559,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">130</span>
-<span class="normal">131</span>
-<span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
-<span class="normal">137</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">137</span>
 <span class="normal">138</span>
 <span class="normal">139</span>
 <span class="normal">140</span>
@@ -3569,7 +3568,14 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 <span class="normal">143</span>
 <span class="normal">144</span>
 <span class="normal">145</span>
-<span class="normal">146</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/api/invites"</span><span class="p">)</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/api/invites"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">list_invites</span><span class="p">(</span>
     <span class="n">s_data</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">RoleChecker</span><span class="p">(</span><span class="s2">"organizer"</span><span class="p">)),</span>
     <span class="n">db</span><span class="p">:</span> <span class="n">PgClient</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
@@ -3732,14 +3738,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">149</span>
-<span class="normal">150</span>
-<span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">156</span>
 <span class="normal">157</span>
 <span class="normal">158</span>
 <span class="normal">159</span>
@@ -3762,7 +3761,14 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 <span class="normal">176</span>
 <span class="normal">177</span>
 <span class="normal">178</span>
-<span class="normal">179</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites/revoke"</span><span class="p">)</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites/revoke"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">revoke_invite</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">invite_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
@@ -3862,14 +3868,7 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">189</span>
 <span class="normal">190</span>
 <span class="normal">191</span>
 <span class="normal">192</span>
@@ -3877,7 +3876,14 @@ invitee opens /admin/invite?t=…, picks a username and password, and is signed 
 <span class="normal">194</span>
 <span class="normal">195</span>
 <span class="normal">196</span>
-<span class="normal">197</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/api/invites/check"</span><span class="p">)</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/api/invites/check"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_invite</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span> <span class="n">db</span><span class="p">:</span> <span class="n">PgClient</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Whether a link is still good, and for what role. Read-only: link previews fetch this.</span>
 
@@ -4083,14 +4089,7 @@ leaves the link usable; the consume and the insert commit together.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>backend/routers/invites.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">200</span>
-<span class="normal">201</span>
-<span class="normal">202</span>
-<span class="normal">203</span>
-<span class="normal">204</span>
-<span class="normal">205</span>
-<span class="normal">206</span>
-<span class="normal">207</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">207</span>
 <span class="normal">208</span>
 <span class="normal">209</span>
 <span class="normal">210</span>
@@ -4145,7 +4144,14 @@ leaves the link usable; the consume and the insert commit together.</p>
 <span class="normal">259</span>
 <span class="normal">260</span>
 <span class="normal">261</span>
-<span class="normal">262</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites/accept"</span><span class="p">)</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/invites/accept"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">accept_invite</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">t</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>

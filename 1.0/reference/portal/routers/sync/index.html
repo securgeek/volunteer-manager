@@ -4260,12 +4260,7 @@ into every page load.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">467</span>
 <span class="normal">468</span>
 <span class="normal">469</span>
 <span class="normal">470</span>
@@ -4321,7 +4316,12 @@ into every page load.</p>
 <span class="normal">520</span>
 <span class="normal">521</span>
 <span class="normal">522</span>
-<span class="normal">523</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/branding"</span><span class="p">)</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/branding"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_branding</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                         <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Conference title, the theme logo, its favicon, the header logo, and the public contact.</span>
@@ -4464,12 +4464,7 @@ carries the volunteer's <code>invite_id</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">541</span>
-<span class="normal">542</span>
-<span class="normal">543</span>
-<span class="normal">544</span>
-<span class="normal">545</span>
-<span class="normal">546</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">546</span>
 <span class="normal">547</span>
 <span class="normal">548</span>
 <span class="normal">549</span>
@@ -4508,7 +4503,12 @@ carries the volunteer's <code>invite_id</code>.</p>
 <span class="normal">582</span>
 <span class="normal">583</span>
 <span class="normal">584</span>
-<span class="normal">585</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/signup_invites"</span><span class="p">)</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/signup_invites"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_signup_invites</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                               <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""The scheduler's early-access invites, replacing the portal's list wholesale.</span>
@@ -4635,12 +4635,7 @@ bring the volunteer back.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">611</span>
-<span class="normal">612</span>
-<span class="normal">613</span>
-<span class="normal">614</span>
-<span class="normal">615</span>
-<span class="normal">616</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">616</span>
 <span class="normal">617</span>
 <span class="normal">618</span>
 <span class="normal">619</span>
@@ -4678,7 +4673,12 @@ bring the volunteer back.</p>
 <span class="normal">651</span>
 <span class="normal">652</span>
 <span class="normal">653</span>
-<span class="normal">654</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/purge_volunteers"</span><span class="p">)</span>
+<span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span>
+<span class="normal">659</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/purge_volunteers"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">purge_volunteers</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                            <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Delete volunteers outright, so the same address can sign up again from scratch.</span>
@@ -4799,12 +4799,7 @@ bring the volunteer back.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">657</span>
-<span class="normal">658</span>
-<span class="normal">659</span>
-<span class="normal">660</span>
-<span class="normal">661</span>
-<span class="normal">662</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">662</span>
 <span class="normal">663</span>
 <span class="normal">664</span>
 <span class="normal">665</span>
@@ -4828,7 +4823,12 @@ bring the volunteer back.</p>
 <span class="normal">683</span>
 <span class="normal">684</span>
 <span class="normal">685</span>
-<span class="normal">686</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/announcements"</span><span class="p">)</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/announcements"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_announcements</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                              <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Replace the announcement set.</span>
@@ -4935,12 +4935,7 @@ bring the volunteer back.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">689</span>
-<span class="normal">690</span>
-<span class="normal">691</span>
-<span class="normal">692</span>
-<span class="normal">693</span>
-<span class="normal">694</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">694</span>
 <span class="normal">695</span>
 <span class="normal">696</span>
 <span class="normal">697</span>
@@ -4958,7 +4953,12 @@ bring the volunteer back.</p>
 <span class="normal">709</span>
 <span class="normal">710</span>
 <span class="normal">711</span>
-<span class="normal">712</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/settings"</span><span class="p">)</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/settings"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_settings</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                         <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Set portal_kv entries — signup open/closed, the email public key, login copy.</span>
@@ -5062,15 +5062,7 @@ they become a public page, the signup form's rules, and an email.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">771</span>
-<span class="normal">772</span>
-<span class="normal">773</span>
-<span class="normal">774</span>
-<span class="normal">775</span>
-<span class="normal">776</span>
-<span class="normal">777</span>
-<span class="normal">778</span>
-<span class="normal">779</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">779</span>
 <span class="normal">780</span>
 <span class="normal">781</span>
 <span class="normal">782</span>
@@ -5094,7 +5086,15 @@ they become a public page, the signup form's rules, and an email.</p>
 <span class="normal">800</span>
 <span class="normal">801</span>
 <span class="normal">802</span>
-<span class="normal">803</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/content"</span><span class="p">)</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span>
+<span class="normal">808</span>
+<span class="normal">809</span>
+<span class="normal">810</span>
+<span class="normal">811</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/content"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_content</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                        <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""The organizers' landing page, questionnaire and invite email, replacing what's here.</span>
@@ -5211,15 +5211,7 @@ retried request a replay, not a second email.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">806</span>
-<span class="normal">807</span>
-<span class="normal">808</span>
-<span class="normal">809</span>
-<span class="normal">810</span>
-<span class="normal">811</span>
-<span class="normal">812</span>
-<span class="normal">813</span>
-<span class="normal">814</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">814</span>
 <span class="normal">815</span>
 <span class="normal">816</span>
 <span class="normal">817</span>
@@ -5259,7 +5251,15 @@ retried request a replay, not a second email.</p>
 <span class="normal">851</span>
 <span class="normal">852</span>
 <span class="normal">853</span>
-<span class="normal">854</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/send_admin_mail"</span><span class="p">)</span>
+<span class="normal">854</span>
+<span class="normal">855</span>
+<span class="normal">856</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/send_admin_mail"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send_admin_mail</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                           <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Mail an admin invite, password reset or volunteer signup invite for the scheduler.</span>
@@ -5388,15 +5388,7 @@ the machine holding the private key.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>portal/routers/sync.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">857</span>
-<span class="normal">858</span>
-<span class="normal">859</span>
-<span class="normal">860</span>
-<span class="normal">861</span>
-<span class="normal">862</span>
-<span class="normal">863</span>
-<span class="normal">864</span>
-<span class="normal">865</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">865</span>
 <span class="normal">866</span>
 <span class="normal">867</span>
 <span class="normal">868</span>
@@ -5429,7 +5421,15 @@ the machine holding the private key.</p>
 <span class="normal">895</span>
 <span class="normal">896</span>
 <span class="normal">897</span>
-<span class="normal">898</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/email_index"</span><span class="p">)</span>
+<span class="normal">898</span>
+<span class="normal">899</span>
+<span class="normal">900</span>
+<span class="normal">901</span>
+<span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/api/sync/email_index"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">push_email_index</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">verified_body</span><span class="p">),</span>
                            <span class="n">conn</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">get_db</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">"""Backfill {vol_id, email_hmac} pairs produced offline by vol_mail.py index.</span>

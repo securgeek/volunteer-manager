@@ -965,6 +965,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#11-an-early-access-invite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. An early-access invite
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-purging-a-volunteer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Purging a volunteer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-passkey-sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Passkey sign-in
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2983,6 +3016,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#11-an-early-access-invite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. An early-access invite
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-purging-a-volunteer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Purging a volunteer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-passkey-sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Passkey sign-in
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3065,6 +3131,21 @@ tables and columns.</p>
 <td>10</td>
 <td><a href="#10-who-owns-which-volunteer-column">Who owns which volunteer column</a></td>
 <td>any volunteer column, either side</td>
+</tr>
+<tr>
+<td>11</td>
+<td><a href="#11-an-early-access-invite">An early-access invite</a></td>
+<td><code>routers/portal_admin.py</code> invites, <code>signup_invites</code> on either side</td>
+</tr>
+<tr>
+<td>12</td>
+<td><a href="#12-purging-a-volunteer">Purging a volunteer</a></td>
+<td><code>purge_volunteers</code> on either side, any table holding a <code>vol_id</code></td>
+</tr>
+<tr>
+<td>13</td>
+<td><a href="#13-passkey-sign-in">Passkey sign-in</a></td>
+<td><code>routers/passkeys.py</code>, <code>auth.start_session</code>, <code>lib/passkey.js</code></td>
 </tr>
 </tbody>
 </table>
@@ -3196,10 +3277,13 @@ same bare 401.</p>
     P--&gt;&gt;L: revs, snapshot_hash, branding_hash, hmac_key_fp, pubkey_fp
 
     opt volunteers_rev &gt; our cursor
-        L-&gt;&gt;P: GET /api/sync/volunteers?since=cursor
+        L-&gt;&gt;P: GET /api/sync/volunteers?since=cursor (pages of 500)
         P--&gt;&gt;L: changed volunteers and their picks
-        L-&gt;&gt;PG: take volunteer-owned columns, skip dirty or re-keying rows
-        L-&gt;&gt;PG: raise shift_flags for dropped assigned picks
+        L-&gt;&gt;PG: skip a row that is the old id of a pending re-key
+        L-&gt;&gt;PG: dirty row: volunteer-owned columns only, else upsert the whole row
+        L-&gt;&gt;PG: mark the signup_invites row used when invite_id comes back
+        L-&gt;&gt;PG: raise shift_flags for dropped assigned picks, replace vol_picks
+        L--&gt;&gt;L: broadcast("volunteers") when anything was written
     end
 
     opt rows with portal_dirty
@@ -3209,6 +3293,8 @@ same bare 401.</p>
         L-&gt;&gt;PG: clear portal_dirty where status still matches what was sent
     end
 
+    L-&gt;&gt;P: GET /api/sync/config
+    P--&gt;&gt;L: the portal's settings
     opt settings differ
         L-&gt;&gt;P: POST /api/sync/settings (portal_signup_open, email_pubkey if fp differs)
     end
@@ -3220,7 +3306,17 @@ same bare 401.</p>
     end
 
     opt branding hash differs
-        L-&gt;&gt;P: POST /api/sync/branding (title, logo, favicon)
+        L-&gt;&gt;P: POST /api/sync/branding (title, logos, favicon, contact links)
+    end
+
+    L-&gt;&gt;PG: build_content (landing, questionnaire, invite email)
+    opt heartbeat has content_hash and it differs
+        L-&gt;&gt;P: POST /api/sync/content (op_id)
+    end
+
+    L-&gt;&gt;PG: build_invites (early-access invite hashes, diagram 11)
+    opt heartbeat has invites_hash and it differs
+        L-&gt;&gt;P: POST /api/sync/signup_invites (op_id), replaces the portal's list
     end
 
     L-&gt;&gt;PG: portal_sync_state: mark ok, or record the error
@@ -3241,22 +3337,27 @@ because nothing in it can decrypt <code>email_enc</code>.</p>
     participant MR as mailrelay
     participant G as Microsoft Graph
 
-    V-&gt;&gt;SPA: enter email
-    SPA-&gt;&gt;S: POST /api/portal/signup/check_email
-    S-&gt;&gt;S: signup_state: open needs the switch, a pubkey and a free pair
+    V-&gt;&gt;SPA: enter email (and the ?invite= token, if the link carried one)
+    SPA-&gt;&gt;S: POST /api/portal/signup/check_email {email, invite}
     S-&gt;&gt;S: email_hmac = HMAC(EMAIL_HMAC_KEY, normalize(email))
-    alt already registered
+    S-&gt;&gt;SQ: ratelimit.check per IP and per address
+    alt over the limit
+        S--&gt;&gt;SPA: 429
+    else already registered
         S--&gt;&gt;SPA: "sign in instead" (goes to request_link)
-    else signup closed or full
-        S--&gt;&gt;SPA: closed or full
-    else open
+    else signup closed and no live invite, or full
+        S--&gt;&gt;SPA: 409 closed or full
+    else no email_pubkey
+        S--&gt;&gt;SPA: 409 closed
+    else open, or a live invite
         S-&gt;&gt;S: email_enc = RSA-OAEP(email_pubkey, email)
-        S-&gt;&gt;SQ: INSERT login_tokens (sha256 of token, purpose signup)
+        S-&gt;&gt;SQ: INSERT login_tokens (sha256 of token, purpose signup, invite_id)
         S-&gt;&gt;M: send magic link {PORTAL_PUBLIC_URL}/apply/verify?t=...
         M-&gt;&gt;MR: POST /send {to, subject, body}, bearer MAIL_RELAY_TOKEN
         MR-&gt;&gt;G: /me/sendMail, from MAIL_SENDER (set at startup)
-        S--&gt;&gt;SPA: check your mail (rate limited per IP and per address)
+        S--&gt;&gt;SPA: check your mail
     end
+    Note over S: Every reply waits out the same floor, so timing doesn't&lt;br/&gt;tell one outcome from another. The invite isn't spent here.
 
     V-&gt;&gt;SPA: open the link at /apply/verify
     Note over SPA: Loading the page spends nothing:&lt;br/&gt;mail scanners and link previews fetch links.
@@ -3271,21 +3372,30 @@ because nothing in it can decrypt <code>email_enc</code>.</p>
     S--&gt;&gt;SPA: possible_match only
     V-&gt;&gt;SPA: answers, two prefs, extras
     SPA-&gt;&gt;S: POST /api/portal/signup/submit
-    S-&gt;&gt;SQ: BEGIN IMMEDIATE: re-check picks, remaining minus 1 for the two prefs
-    S-&gt;&gt;SQ: INSERT volunteers p-xxxxxxxx status pending, vol_picks
-    alt a pick filled meanwhile
-        S--&gt;&gt;SPA: 409, detail.full names it, the form reopens the shifts step
-    else unique index on email_hmac (two submits raced)
+    S-&gt;&gt;SQ: BEGIN IMMEDIATE
+    S-&gt;&gt;SQ: address already has a volunteer row?
+    S-&gt;&gt;SQ: _consume_invite: conditional UPDATE signup_invites SET used_at
+    S-&gt;&gt;SQ: re-check open (or the invite), re-check picks
+    S-&gt;&gt;SQ: INSERT volunteers p-xxxxxxxx status pending, invite_id, vol_picks
+    alt already signed up, or the unique index on email_hmac (two submits raced)
         S--&gt;&gt;SPA: 409 already signed up
+    else closed and the invite is gone
+        S--&gt;&gt;SPA: 409
+    else a pick filled meanwhile
+        S--&gt;&gt;SPA: 409, detail.full names it, the form reopens the shifts step
     else ok
-        S-&gt;&gt;SQ: upgrade the session in place to this vol_id
+        S-&gt;&gt;SQ: remaining minus 1 for the two prefs
+        S-&gt;&gt;SQ: upgrade the session in place to this vol_id, COMMIT
         S--&gt;&gt;SPA: signed up, pending
     end
+    Note over S,SQ: Any 409 rolls the whole transaction back, the invite's use with it.
     Note over S,SQ: Next sync tick (diagram 3): volunteers_rev moved, so the scheduler&lt;br/&gt;pulls the pending row and its picks into Postgres.</code></pre>
 <hr />
 <h2 id="5-approval-and-the-push-back">5. Approval and the push back<a class="headerlink" href="#5-approval-and-the-push-back" title="Permanent link">&para;</a></h2>
-<p>An organizer approves a pending signup, optionally giving it a badge number. Nothing is
-pushed immediately: <code>portal_dirty</code> marks the row, and the next tick carries it.</p>
+<p>An organizer approves a pending signup, optionally giving it a badge number. The request
+doesn't call the portal itself: <code>portal_dirty</code> marks the row, and <code>request_push()</code> wakes the
+sync loop, which carries it about <code>PUSH_DEBOUNCE</code> (2 s) later. If the portal is down, the
+row stays dirty and every later tick retries it.</p>
 <pre class="mermaid"><code>sequenceDiagram
     autonumber
     actor O as Organizer
@@ -3305,15 +3415,17 @@ pushed immediately: <code>portal_dirty</code> marks the row, and the next tick c
         A-&gt;&gt;PG: UPDATE status active, portal_dirty TRUE
     end
     A-&gt;&gt;PG: COMMIT, audit
-    Note over PG: is_assignable is now TRUE (generated column, v17),&lt;br/&gt;so the volunteer appears in every picker.
+    A-&gt;&gt;L: portal_sync.request_push()
+    A--&gt;&gt;O: ok, final vol_id
+    Note over PG: is_assignable is now TRUE (a generated column),&lt;br/&gt;so the volunteer appears in every picker.
 
-    L-&gt;&gt;P: next tick: POST /api/sync/volunteers
+    L-&gt;&gt;P: tick after the debounce: POST /api/sync/volunteers
     Note right of L: rekeys first (old to new vol_id), then the dirty rows&lt;br/&gt;with scheduler-owned columns only
     P-&gt;&gt;SQ: rename vol_id in sessions, login_tokens, vol_picks, snapshot_slots
     P-&gt;&gt;SQ: upsert: CASE WHEN sent per column, so unsent columns keep their value
     P--&gt;&gt;L: written, renamed
     L-&gt;&gt;PG: clear portal_dirty only where status still equals what was sent
-    Note over L,PG: While a row is dirty, pulls skip it, so the portal's older copy&lt;br/&gt;can't undo a decision that hasn't reached the portal yet.</code></pre>
+    Note over L,PG: While a row is dirty, a pull takes only the volunteer-owned columns, and&lt;br/&gt;skips the old id of a pending re-key outright, so the portal's older copy&lt;br/&gt;can't undo a decision that hasn't reached the portal yet.</code></pre>
 <hr />
 <h2 id="6-an-export-api-call">6. An export API call<a class="headerlink" href="#6-an-export-api-call" title="Permanent link">&para;</a></h2>
 <p>A server, or vol_mail, reads the schedule or the volunteers with a bearer key. Every refusal
@@ -3327,8 +3439,8 @@ looks the same.</p>
     participant PG as Postgres
 
     C-&gt;&gt;NG: GET /api/export/volunteers?status=active&lt;br/&gt;Authorization: Bearer bsc_...
-    NG-&gt;&gt;T: proxy (client IP = rightmost X-Forwarded-For)
-    T-&gt;&gt;T: _over_limit(ip)? 10 failures in 15 min
+    NG-&gt;&gt;T: proxy (client IP = first X-Forwarded-For hop, and nginx sends just one)
+    T-&gt;&gt;T: _over_limit(ip)? 10 failures in 15 min, keyed by rate_key (IPv6 by its /64)
     alt over the limit
         T--&gt;&gt;C: 429
     end
@@ -3435,7 +3547,8 @@ code already mailed.</p>
 <hr />
 <h2 id="9-admin-invite-and-reset-mail">9. Admin invite and reset mail<a class="headerlink" href="#9-admin-invite-and-reset-mail" title="Permanent link">&para;</a></h2>
 <p>The scheduler has no mail path of its own. It asks the portal, through the one narrow
-endpoint that mails an address the portal didn't verify itself.</p>
+endpoint that mails an address the portal didn't verify itself. That endpoint takes three
+kinds: <code>invite</code> and <code>reset</code> (drawn here) and <code>signup_invite</code> (diagram 11).</p>
 <pre class="mermaid"><code>sequenceDiagram
     autonumber
     actor O as Organizer
@@ -3449,14 +3562,15 @@ endpoint that mails an address the portal didn't verify itself.</p>
 
     O-&gt;&gt;B: POST /api/invites {role, email} (or someone: POST password_reset/request)
     B-&gt;&gt;PG: INSERT user_invites: sha256(token), expires NOW() + ? * INTERVAL
-    B-&gt;&gt;PS: kind invite, address, link {PORTAL_PUBLIC_URL}/admin/invite?t=...
+    B-&gt;&gt;PS: kind invite, address, link {site_origin()}/admin/invite?t=...
+    Note right of B: site_origin() is ADMIN_PUBLIC_URL,&lt;br/&gt;else PORTAL_PUBLIC_URL (one origin)
     PS-&gt;&gt;P: POST /api/sync/send_admin_mail (signed, op_id)
-    P-&gt;&gt;P: link must start with this site's /admin/invite?t= or /admin/reset?t=
-    P-&gt;&gt;P: one address, strict pattern, at most 20 an hour
+    P-&gt;&gt;P: link must start with its own ADMIN_PUBLIC_URL + /admin/invite?t= or /admin/reset?t=
+    P-&gt;&gt;P: one address, strict pattern, at most 20 admin mails an hour
     P-&gt;&gt;M: fixed template admin_invite.txt or admin_reset.txt
     M-&gt;&gt;MR: POST /send
     MR-&gt;&gt;G: /me/sendMail
-    P-&gt;&gt;P: audit "admin_mail.sent invite" (no address, no link)
+    P-&gt;&gt;P: audit "admin_mail.sent", detail invite (no address, no link)
     P--&gt;&gt;PS: ok
     alt mail failed
         B--&gt;&gt;O: invite created, email_error, copy the link yourself
@@ -3476,17 +3590,166 @@ the volunteer just made both survive.</p>
     subgraph sched_side["Scheduler owns (organizer decisions)"]
         so["status (pending, active)&lt;br/&gt;name&lt;br/&gt;inactive_at"]
     end
-    subgraph derived["Derived in Postgres (generated, v17)"]
+    subgraph derived["Derived in Postgres (generated columns)"]
         gc["is_live = not cancelled and not inactive&lt;br/&gt;is_counted = pending or active, and live&lt;br/&gt;is_assignable = active and live"]
     end
 
     vo --&gt;|"pull: always taken,&lt;br/&gt;even on a dirty row"| pgv[("Postgres volunteers")]
     so --&gt;|"push: only these columns,&lt;br/&gt;CASE WHEN sent per column"| pv[("portal.db volunteers")]
     pgv --&gt; gc
-    gc --&gt;|"pickers, capacity,&lt;br/&gt;needs-replacement flags"| uses["schedule.py, volunteers.py,&lt;br/&gt;portal_admin.py, export.py"]</code></pre>
+    gc --&gt;|"pickers, capacity,&lt;br/&gt;needs-replacement flags"| uses["schedule.py, volunteers.py,&lt;br/&gt;portal_admin.py, export.py,&lt;br/&gt;portal_sync.compute_remaining"]</code></pre>
 <p>Defined in <code>portal_sync.VOLUNTEER_OWNED</code> / <code>SCHEDULER_OWNED</code> (scheduler side) and
 <code>routers/sync.PUSH_COLUMNS</code> (portal side). <code>cancelled_at</code> isn't in the portal's push
 columns at all, so the scheduler can neither set nor clear it.</p>
+<hr />
+<h2 id="11-an-early-access-invite">11. An early-access invite<a class="headerlink" href="#11-an-early-access-invite" title="Permanent link">&para;</a></h2>
+<p>A single-use link that lets one person sign up while the call for volunteers is closed. The
+scheduler makes it and keeps only its hash; the portal gets the hashes on the sync, spends
+the invite at submit, and the scheduler learns of the use from the next pull. An organizer
+can copy a link (<code>POST /api/admin/portal/invites</code>) or have it emailed (<code>.../invites/send</code>,
+drawn here).</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor O as Organizer
+    participant A as routers/portal_admin.py
+    participant PG as Postgres
+    participant PS as portal_sync
+    participant P as portal routers/sync.py
+    participant MR as Mailer → mailrelay
+    actor V as Volunteer
+    participant S as portal signup.py
+
+    O-&gt;&gt;A: POST /api/admin/portal/invites/send {name, email, days}
+    A-&gt;&gt;A: clean_email, then one send per INVITE_SEND_GAP_SEC (10 s), all organizers
+    alt within 10 s of the last send
+        A--&gt;&gt;O: 429, Retry-After
+    end
+    A-&gt;&gt;PG: INSERT signup_invites: sha256(token), label, expires NOW() + days, COMMIT
+    Note right of A: link = {PORTAL_PUBLIC_URL}/apply/signup?invite=token,&lt;br/&gt;never stored, never returned by send
+    A-&gt;&gt;PS: push_signup_invites (before the mail, so the link works on arrival)
+    PS-&gt;&gt;P: POST /api/sync/signup_invites {invites: hashes, content_hash, op_id}
+    P-&gt;&gt;P: replace the list wholesale, keep used_at, store signup_invites_hash
+    A-&gt;&gt;PS: send_admin_mail kind signup_invite
+    PS-&gt;&gt;P: POST /api/sync/send_admin_mail (signed, op_id)
+    P-&gt;&gt;P: link must start with PORTAL_PUBLIC_URL + /apply/signup?invite=
+    P-&gt;&gt;P: at most 200 invite mails an hour
+    P-&gt;&gt;MR: the organizers' invite template (Volunteer Portal → Invite email)
+    alt push or mail failed
+        A-&gt;&gt;PG: DELETE the invite, request_push()
+        A--&gt;&gt;O: 429 (portal's hourly cap) or 502
+    else sent
+        A-&gt;&gt;PG: UPDATE emailed_at, audit (label, never the address)
+        A--&gt;&gt;O: invite_id, label, expires_at
+    end
+
+    V-&gt;&gt;S: open /apply/signup?invite=…
+    S-&gt;&gt;S: GET signup/invite: valid, used, expired or revoked (read-only)
+    V-&gt;&gt;S: check_email, verify, submit (diagram 4), the invite riding on the login token
+    S-&gt;&gt;S: submit: _consume_invite in the same transaction as the INSERT
+    Note over PS,S: Next tick (diagram 3): the pulled volunteer carries invite_id,&lt;br/&gt;so the scheduler sets used_at and used_by. The signup is still pending.</code></pre>
+<p>Revoking (<code>invites/revoke</code>) sets <code>revoked_at</code> and calls <code>request_push()</code>; the portal refuses
+the link from the next push on.</p>
+<hr />
+<h2 id="12-purging-a-volunteer">12. Purging a volunteer<a class="headerlink" href="#12-purging-a-volunteer" title="Permanent link">&para;</a></h2>
+<p>Deleting a volunteer outright, for clearing test signups so their address can sign up
+again. Inactive volunteers only. The portal goes first: deleted here first, the next pull
+would bring the volunteer straight back.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor O as Organizer
+    participant A as routers/portal_admin.py
+    participant PS as portal_sync.purge_volunteers
+    participant PG as Postgres
+    participant P as portal routers/sync.py
+    participant SQ as portal.db
+    participant EV as routers/events.py
+
+    O-&gt;&gt;A: POST /api/admin/volunteers/purge {vol_ids, confirm}
+    A-&gt;&gt;A: 1 to PURGE_MAX (500) ids, confirm = the vol_id, or the count
+    A-&gt;&gt;PG: every id exists and has inactive_at
+    alt missing, or still active
+        A--&gt;&gt;O: 404, or 409 "make them inactive first"
+    end
+    A-&gt;&gt;PS: purge_volunteers(ids)
+    PS-&gt;&gt;PS: take _state.lock, the one every sync tick holds
+    PS-&gt;&gt;PG: SELECT vol_id, portal_rekey_from
+    opt portal configured
+        PS-&gt;&gt;P: POST /api/sync/purge_volunteers {vol_ids + any re-key old ids, op_id}
+        P-&gt;&gt;SQ: BEGIN IMMEDIATE
+        P-&gt;&gt;SQ: delete the row, picks, sessions and login_tokens by id or email_hmac
+        P-&gt;&gt;SQ: clear snapshot_slots, drop the address's rate-limit buckets, audit, COMMIT
+        P--&gt;&gt;PS: purged
+        alt portal failed in any way
+            PS--&gt;&gt;A: RuntimeError, nothing deleted here
+            A--&gt;&gt;O: 502, try again
+        end
+    end
+    PS-&gt;&gt;PG: _PURGE_LOCAL_SQL: delete picks, shift_flags, vol_notes,&lt;br/&gt;empty vol_id in schedule and radio_checkouts (rows kept)
+    PS-&gt;&gt;PG: DELETE volunteers RETURNING vol_id, COMMIT
+    PS-&gt;&gt;PS: release the lock, request_push()
+    A-&gt;&gt;A: audit each, by name and id
+    A-&gt;&gt;EV: broadcast("volunteers"), broadcast("schedule")
+    A--&gt;&gt;O: purged ids</code></pre>
+<p>Because the delete runs under the sync lock, a pull already under way finishes first, and
+no pull can start between the portal's delete and the scheduler's. Radio history keeps
+<code>person_name</code>, so a returned radio still says who had it.</p>
+<hr />
+<h2 id="13-passkey-sign-in">13. Passkey sign-in<a class="headerlink" href="#13-passkey-sign-in" title="Permanent link">&para;</a></h2>
+<p>An organizer signs in with a passkey instead of a password. No username is typed: the
+authenticator offers whatever passkeys it holds for this site. The session at the end is the
+one the password login makes, from the same function.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor O as Organizer
+    participant L as setup/Login.vue + lib/passkey.js
+    participant AU as Authenticator (browser, phone or manager)
+    participant PK as routers/passkeys.py
+    participant AS as auth.start_session
+    participant PG as Postgres
+
+    L-&gt;&gt;PK: GET /api/passkeys/config
+    PK-&gt;&gt;PK: _site(): rp_id = ADMIN_PUBLIC_URL's host (else PORTAL_PUBLIC_URL's)
+    PK--&gt;&gt;L: enabled (false when unset, or plain http off localhost)
+    Note over L: The button shows only when enabled and the browser has WebAuthn.
+
+    O-&gt;&gt;L: Sign in with a passkey
+    L-&gt;&gt;PK: POST /api/passkeys/login/options
+    PK-&gt;&gt;PG: sweep expired webauthn_challenges
+    PK-&gt;&gt;PG: INSERT sha256(challenge), purpose login, no user_id, 5 min, COMMIT
+    PK--&gt;&gt;L: options: rp_id, challenge, user verification required
+    L-&gt;&gt;AU: startAuthentication (@simplewebauthn/browser, lazy-loaded)
+    AU-&gt;&gt;O: PIN or biometric
+    AU--&gt;&gt;L: signed assertion (credential id, userHandle, sign count)
+    alt prompt cancelled
+        L--&gt;&gt;O: nothing shown (cancelled)
+    end
+
+    L-&gt;&gt;PK: POST /api/passkeys/login/verify {credential}
+    PK-&gt;&gt;PG: _consume_challenge: UPDATE SET used_at WHERE unused, unexpired,&lt;br/&gt;purpose login, COMMIT, before any signature check
+    alt no such challenge (expired or replayed)
+        PK--&gt;&gt;L: 400
+    end
+    PK-&gt;&gt;PG: SELECT user_passkeys JOIN users WHERE credential_id = ?
+    alt unknown passkey, or userHandle ≠ users.webauthn_user_id
+        PK-&gt;&gt;PK: audit
+        PK--&gt;&gt;L: 401 "Passkey not recognized. Sign in with your password"
+    end
+    PK-&gt;&gt;PK: verify_authentication_response (challenge, rp_id, origin,&lt;br/&gt;public key, sign count, user verification)
+    alt signature or count fails
+        PK-&gt;&gt;PK: audit
+        PK--&gt;&gt;L: 401
+    end
+    PK-&gt;&gt;PG: UPDATE sign_count, backed_up, last_used_at
+    PK-&gt;&gt;AS: start_session(row)
+    AS-&gt;&gt;PG: UPDATE users last_login_at, INSERT sessions, COMMIT
+    AS-&gt;&gt;AS: session cookie, _session_cache entry
+    PK-&gt;&gt;PK: audit "Signed in with a passkey (alg)"
+    PK--&gt;&gt;L: {username, role}, the same as POST /api/login</code></pre>
+<p>The challenge burns on the first attempt whether the signature then checks or not, so a
+captured response is good for nothing. A passkey removed from the account still lives on the
+device, which keeps offering it; that's the 401 that says to use the password. Adding a
+passkey (<code>register/options</code>) needs the current password, so a stolen session cookie can't
+plant one.</p>
 
 
 

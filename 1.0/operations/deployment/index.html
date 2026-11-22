@@ -2937,19 +2937,20 @@ and the less routine jobs: the first install, upgrading PostgreSQL and backups.<
 <pre class="mermaid"><code>flowchart LR
     v([Volunteers]) --&gt; cf[Edge&lt;br/&gt;TLS]
     o([Organizers]) --&gt; cfa[Access gate] --&gt; cf
+    i([Integrators and&lt;br/&gt;tools/vol_mail]) -.-&gt;|"/api/export/*&lt;br/&gt;bypasses the gate, bearer key"| cf
     cf --&gt; cfd[Tunnel client&lt;br/&gt;on the host]
     subgraph host [Host: podman-compose]
         cfd --&gt;|127.0.0.1:8082| fe8082[frontend nginx&lt;br/&gt;public pages]
         cfd --&gt;|127.0.0.1:8080| fe8080[frontend nginx&lt;br/&gt;full site]
         fe8082 --&gt;|/api/portal/*| portal
         fe8080 --&gt;|/api/portal/*| portal
-        fe8080 --&gt;|/api/*| backend
+        fe8080 --&gt;|"/api/* (incl. /api/export/*)"| backend
         backend --&gt; postgres[(postgres)]
         backend --&gt;|signed sync API| portal
         portal --&gt; pdb[(portal.db)]
         portal --&gt;|mail_internal| mailrelay
     end
-    mailrelay --&gt;|mail_egress| graph[Microsoft Graph]</code></pre>
+    mailrelay --&gt;|mail_egress| msgraph[Microsoft Graph]</code></pre>
 <table>
 <thead>
 <tr>

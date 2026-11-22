@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:a5716526-bcf2-4051-a941-01cd1759206c",
+  "serialNumber": "urn:uuid:11deab46-4b10-4900-9023-7aa8a51d87b0",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-22T02:44:49+00:00",
+    "timestamp": "2026-11-22T23:34:45+00:00",
     "tools": {
       "components": [
         {
@@ -94,7 +94,7 @@
   },
   "components": [
     {
-      "bom-ref": "0afaff2f-a587-4d27-bf89-334cd4140330",
+      "bom-ref": "3464388b-05bf-4d9f-aa3b-3511fa0137a4",
       "type": "operating-system",
       "name": "alpine",
       "version": "3.24.4",
@@ -110,7 +110,7 @@
       ]
     },
     {
-      "bom-ref": "89f8dce4-5b89-47f9-947c-fc7fde4a71a9",
+      "bom-ref": "3bb6b595-a063-404e-9c38-3ada9091839d",
       "type": "application",
       "name": "usr/local/bin/gosu",
       "properties": [
@@ -2673,7 +2673,7 @@
   ],
   "dependencies": [
     {
-      "ref": "0afaff2f-a587-4d27-bf89-334cd4140330",
+      "ref": "3464388b-05bf-4d9f-aa3b-3511fa0137a4",
       "dependsOn": [
         "pkg:apk/alpine/.postgresql-rundeps@20261118.213125?arch=noarch&distro=3.24.4",
         "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64&distro=3.24.4",
@@ -2684,7 +2684,7 @@
       ]
     },
     {
-      "ref": "89f8dce4-5b89-47f9-947c-fc7fde4a71a9",
+      "ref": "3bb6b595-a063-404e-9c38-3ada9091839d",
       "dependsOn": [
         "pkg:golang/github.com/tianon/gosu@v1.20.0"
       ]
@@ -3092,8 +3092,8 @@
     {
       "ref": "pkg:oci/postgres@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fpostgres",
       "dependsOn": [
-        "0afaff2f-a587-4d27-bf89-334cd4140330",
-        "89f8dce4-5b89-47f9-947c-fc7fde4a71a9"
+        "3464388b-05bf-4d9f-aa3b-3511fa0137a4",
+        "3bb6b595-a063-404e-9c38-3ada9091839d"
       ]
     }
   ],
@@ -3259,6 +3259,9 @@
           "url": "http://www.openwall.com/lists/oss-security/2025/10/08/1"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2025:23295"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:1381"
         },
         {
@@ -3280,7 +3283,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-58183"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-1381.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2025-23295.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:1381"
@@ -4939,9 +4942,6 @@
           "url": "https://bugzilla.redhat.com/2434432"
         },
         {
-          "url": "https://bugzilla.redhat.com/2437111"
-        },
-        {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2434432"
         },
         {
@@ -4957,7 +4957,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-68121"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-4177.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-3669.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:4177"
@@ -5162,6 +5162,9 @@
           "url": "http://www.openwall.com/lists/oss-security/2026/01/15/4"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:3336"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:3753"
         },
         {
@@ -5207,7 +5210,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-68121"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-3753.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-3336.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:3753"
@@ -5329,6 +5332,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2025-61729"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:3336"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:3928"
         },
         {
@@ -5336,6 +5342,9 @@
         },
         {
           "url": "https://bugzilla.redhat.com/2418462"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2434431"
         },
         {
           "url": "https://bugzilla.redhat.com/2434432"
@@ -5365,7 +5374,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-68121"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-3928.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-3336.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:3928"
@@ -5594,10 +5603,19 @@
           "url": "https://avd.aquasec.com/nvd/cve-2025-68121"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:3336"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:4177"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2025-68121"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2418462"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2434431"
         },
         {
           "url": "https://bugzilla.redhat.com/2434432"
@@ -5621,7 +5639,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-68121"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-4177.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-3336.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:4177"
@@ -5820,7 +5838,28 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98539"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98610"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-111943"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515815"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515827"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515839"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2548334"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2548336"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2548341"
         },
         {
           "url": "https://bugzilla.redhat.com/2556068"
@@ -5835,7 +5874,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-111943"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98539.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98610.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98539"
@@ -6714,6 +6753,9 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:9695"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:97387"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:9742"
         },
         {
@@ -6723,7 +6765,16 @@
           "url": "https://access.redhat.com/security/cve/CVE-2026-25679"
         },
         {
+          "url": "https://bugzilla.redhat.com/2445345"
+        },
+        {
           "url": "https://bugzilla.redhat.com/2445356"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2467822"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515840"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2445356"
@@ -6735,7 +6786,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-25679"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-9044.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-97387.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:9044"
@@ -7308,13 +7359,25 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:97644"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98617"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-27145"
         },
         {
-          "url": "https://bugzilla.redhat.com/2467822"
+          "url": "https://bugzilla.redhat.com/2484207"
         },
         {
-          "url": "https://bugzilla.redhat.com/2484207"
+          "url": "https://bugzilla.redhat.com/2515815"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515820"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515839"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2548344"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2467822"
@@ -7332,7 +7395,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-33811"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-97644.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98617.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:97644"
@@ -8024,16 +8087,22 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:9385"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:97215"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:97555"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-32280"
         },
         {
-          "url": "https://bugzilla.redhat.com/2456333"
+          "url": "https://bugzilla.redhat.com/2456335"
         },
         {
           "url": "https://bugzilla.redhat.com/2456339"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2480757"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2456335"
@@ -8057,7 +8126,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-33810"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-49838.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-97215.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:97555"
@@ -8179,10 +8248,10 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-32281"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:49838"
+          "url": "https://access.redhat.com/errata/RHSA-2026:65886"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:65886"
+          "url": "https://access.redhat.com/errata/RHSA-2026:97284"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-32281"
@@ -8191,7 +8260,7 @@
           "url": "https://bugzilla.redhat.com/2456333"
         },
         {
-          "url": "https://bugzilla.redhat.com/2456339"
+          "url": "https://bugzilla.redhat.com/2456335"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2456333"
@@ -8275,7 +8344,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-56862"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-49838.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-97284.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:65886"
@@ -8330,7 +8399,7 @@
           "source": {
             "name": "alma"
           },
-          "severity": "high"
+          "severity": "medium"
         },
         {
           "source": {
@@ -8394,7 +8463,7 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-32282"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:19353"
+          "url": "https://access.redhat.com/errata/RHSA-2026:22141"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:23228"
@@ -8403,25 +8472,13 @@
           "url": "https://access.redhat.com/security/cve/CVE-2026-32282"
         },
         {
-          "url": "https://bugzilla.redhat.com/2445356"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2449833"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2455470"
+          "url": "https://bugzilla.redhat.com/2437111"
         },
         {
           "url": "https://bugzilla.redhat.com/2456333"
         },
         {
-          "url": "https://bugzilla.redhat.com/2456335"
-        },
-        {
           "url": "https://bugzilla.redhat.com/2456336"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2456338"
         },
         {
           "url": "https://bugzilla.redhat.com/2456339"
@@ -8478,7 +8535,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-34986"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-19353.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-22141.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:23228"
@@ -9015,9 +9072,6 @@
           "url": "https://access.redhat.com/security/cve/CVE-2026-32283"
         },
         {
-          "url": "https://bugzilla.redhat.com/2445356"
-        },
-        {
           "url": "https://bugzilla.redhat.com/2456333"
         },
         {
@@ -9054,7 +9108,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-32283"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-29703.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-24470.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:29703"
@@ -9781,16 +9835,25 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:67319"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:97387"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:97644"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-33811"
         },
         {
+          "url": "https://bugzilla.redhat.com/2445345"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2445356"
+        },
+        {
           "url": "https://bugzilla.redhat.com/2467822"
         },
         {
-          "url": "https://bugzilla.redhat.com/2484207"
+          "url": "https://bugzilla.redhat.com/2515840"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2467822"
@@ -9808,7 +9871,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-33811"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-97644.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-97387.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:97644"
@@ -10350,28 +10413,25 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98617"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-33818"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2484207"
         },
         {
           "url": "https://bugzilla.redhat.com/2515815"
         },
         {
-          "url": "https://bugzilla.redhat.com/2515827"
+          "url": "https://bugzilla.redhat.com/2515820"
         },
         {
           "url": "https://bugzilla.redhat.com/2515839"
         },
         {
-          "url": "https://bugzilla.redhat.com/2548334"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2548336"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2548341"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2556068"
+          "url": "https://bugzilla.redhat.com/2548344"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2515815"
@@ -10419,7 +10479,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98617.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -11504,37 +11564,22 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:68504"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:97386"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-39821"
         },
         {
-          "url": "https://bugzilla.redhat.com/2467809"
+          "url": "https://bugzilla.redhat.com/2445345"
         },
         {
-          "url": "https://bugzilla.redhat.com/2467820"
+          "url": "https://bugzilla.redhat.com/2445356"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2467822"
         },
         {
           "url": "https://bugzilla.redhat.com/2480756"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2484204"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515815"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515820"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515827"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515838"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515839"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515840"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2456333"
@@ -11618,7 +11663,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-56862"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-65153.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-97386.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:65886"
@@ -11761,6 +11806,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-39822"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:38495"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:38878"
         },
         {
@@ -11779,7 +11827,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-39822"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-38878.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-38495.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:38878"
@@ -12972,7 +13020,7 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:68527"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98447"
+          "url": "https://access.redhat.com/errata/RHSA-2026:70201"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:98448"
@@ -12981,13 +13029,25 @@
           "url": "https://access.redhat.com/security/cve/CVE-2026-42499"
         },
         {
+          "url": "https://bugzilla.redhat.com/2456335"
+        },
+        {
           "url": "https://bugzilla.redhat.com/2467809"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2504233"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2508234"
         },
         {
           "url": "https://bugzilla.redhat.com/2515815"
         },
         {
           "url": "https://bugzilla.redhat.com/2515820"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515827"
         },
         {
           "url": "https://bugzilla.redhat.com/2515838"
@@ -13038,7 +13098,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-56862"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98447.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-70201.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98448"
@@ -13096,7 +13156,7 @@
           "source": {
             "name": "alma"
           },
-          "severity": "high"
+          "severity": "medium"
         },
         {
           "source": {
@@ -13157,7 +13217,7 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-42504"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:65153"
+          "url": "https://access.redhat.com/errata/RHSA-2026:29980"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:65886"
@@ -13166,34 +13226,7 @@
           "url": "https://access.redhat.com/security/cve/CVE-2026-42504"
         },
         {
-          "url": "https://bugzilla.redhat.com/2467809"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2467820"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2480756"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2484204"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515815"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515820"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515827"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515838"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515839"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515840"
+          "url": "https://bugzilla.redhat.com/2484205"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2456333"
@@ -13277,7 +13310,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-56862"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-65153.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-29980.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:65886"
@@ -13381,22 +13414,16 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-42505"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:66364"
+          "url": "https://access.redhat.com/errata/RHSA-2026:37436"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-42505"
         },
         {
-          "url": "https://bugzilla.redhat.com/2515815"
+          "url": "https://bugzilla.redhat.com/2480756"
         },
         {
-          "url": "https://bugzilla.redhat.com/2515820"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515839"
-        },
-        {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-66364.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-37436.html"
         },
         {
           "url": "https://go.dev/cl/775960"
@@ -13442,7 +13469,7 @@
           "source": {
             "name": "alma"
           },
-          "severity": "high"
+          "severity": "medium"
         },
         {
           "source": {
@@ -13500,22 +13527,16 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-42507"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:29981"
+          "url": "https://access.redhat.com/errata/RHSA-2026:29980"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:66364"
+          "url": "https://access.redhat.com/errata/RHSA-2026:29981"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-42507"
         },
         {
-          "url": "https://bugzilla.redhat.com/2515815"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515820"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2515839"
+          "url": "https://bugzilla.redhat.com/2484205"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2484205"
@@ -13533,7 +13554,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-42507"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-66364.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-29980.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:29981"
@@ -13646,6 +13667,9 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98610"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-56853"
         },
         {
@@ -13715,7 +13739,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98610.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -13914,10 +13938,10 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-56858"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98449"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98555"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-56858"
@@ -13989,7 +14013,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98449.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98555.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98479"
@@ -14108,16 +14132,19 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98447"
         },
         {
-          "url": "https://access.redhat.com/security/cve/CVE-2026-56859"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98554"
         },
         {
-          "url": "https://bugzilla.redhat.com/2467809"
+          "url": "https://access.redhat.com/security/cve/CVE-2026-56859"
         },
         {
           "url": "https://bugzilla.redhat.com/2515815"
         },
         {
           "url": "https://bugzilla.redhat.com/2515820"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515827"
         },
         {
           "url": "https://bugzilla.redhat.com/2515838"
@@ -14127,6 +14154,9 @@
         },
         {
           "url": "https://bugzilla.redhat.com/2515840"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2518147"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2467809"
@@ -14168,7 +14198,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-56862"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98447.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98554.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98447"
@@ -14284,16 +14314,28 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-56860"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98451"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98617"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-56860"
         },
         {
+          "url": "https://bugzilla.redhat.com/2484207"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515815"
+        },
+        {
           "url": "https://bugzilla.redhat.com/2515820"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515839"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2548344"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2515815"
@@ -14347,7 +14389,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98451.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98617.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98479"
@@ -14466,28 +14508,25 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98617"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-56862"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2484207"
         },
         {
           "url": "https://bugzilla.redhat.com/2515815"
         },
         {
-          "url": "https://bugzilla.redhat.com/2515827"
+          "url": "https://bugzilla.redhat.com/2515820"
         },
         {
           "url": "https://bugzilla.redhat.com/2515839"
         },
         {
-          "url": "https://bugzilla.redhat.com/2548334"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2548336"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2548341"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2556068"
+          "url": "https://bugzilla.redhat.com/2548344"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2515815"
@@ -14535,7 +14574,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98617.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -14651,6 +14690,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-56866"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
         },
         {
@@ -14762,7 +14804,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -14832,7 +14874,7 @@
           "source": {
             "name": "azure"
           },
-          "severity": "medium"
+          "severity": "high"
         },
         {
           "source": {
@@ -14873,6 +14915,9 @@
       "advisories": [
         {
           "url": "https://avd.aquasec.com/nvd/cve-2026-78659"
+        },
+        {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
@@ -14986,7 +15031,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -15111,6 +15156,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-78660"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
         },
         {
@@ -15222,7 +15270,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -15338,6 +15386,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-78663"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
         },
         {
@@ -15449,7 +15500,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -15571,6 +15622,9 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98610"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-78667"
         },
         {
@@ -15640,7 +15694,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98610.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -15765,28 +15819,28 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-78669"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:93617"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
         },
         {
-          "url": "https://access.redhat.com/errata/RHSA-2026:98479"
+          "url": "https://access.redhat.com/errata/RHSA-2026:98617"
         },
         {
           "url": "https://access.redhat.com/security/cve/CVE-2026-78669"
         },
         {
-          "url": "https://bugzilla.redhat.com/2548334"
+          "url": "https://bugzilla.redhat.com/2484207"
         },
         {
-          "url": "https://bugzilla.redhat.com/2548336"
+          "url": "https://bugzilla.redhat.com/2515815"
         },
         {
-          "url": "https://bugzilla.redhat.com/2548341"
+          "url": "https://bugzilla.redhat.com/2515820"
+        },
+        {
+          "url": "https://bugzilla.redhat.com/2515839"
         },
         {
           "url": "https://bugzilla.redhat.com/2548344"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2556068"
         },
         {
           "url": "https://bugzilla.redhat.com/show_bug.cgi?id=2515815"
@@ -15840,7 +15894,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-93617.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98617.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98479"
@@ -15980,16 +16034,13 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98468"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98572"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-86144"
         },
         {
-          "url": "https://bugzilla.redhat.com/2491354"
-        },
-        {
           "url": "https://bugzilla.redhat.com/2494191"
-        },
-        {
-          "url": "https://bugzilla.redhat.com/2528986"
         },
         {
           "url": "https://bugzilla.redhat.com/2528987"
@@ -16058,7 +16109,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-86144"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98468.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98572.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98468"
@@ -16319,6 +16370,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-94439"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
         },
         {
@@ -16430,7 +16484,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -16546,6 +16600,9 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98610"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-94440"
         },
         {
@@ -16615,7 +16672,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98610.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -16720,6 +16777,9 @@
       "advisories": [
         {
           "url": "https://avd.aquasec.com/nvd/cve-2026-94448"
+        },
+        {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
@@ -16833,7 +16893,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -17085,6 +17145,9 @@
           "url": "https://avd.aquasec.com/nvd/cve-2026-97030"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
+        },
+        {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
         },
         {
@@ -17196,7 +17259,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"
@@ -17297,6 +17360,9 @@
           "url": "https://access.redhat.com/errata/RHSA-2026:98502"
         },
         {
+          "url": "https://access.redhat.com/errata/RHSA-2026:98610"
+        },
+        {
           "url": "https://access.redhat.com/security/cve/CVE-2026-97031"
         },
         {
@@ -17366,7 +17432,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97031"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-98502.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-98610.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:98502"
@@ -17433,7 +17499,7 @@
           "source": {
             "name": "azure"
           },
-          "severity": "medium"
+          "severity": "high"
         },
         {
           "source": {
@@ -17474,6 +17540,9 @@
       "advisories": [
         {
           "url": "https://avd.aquasec.com/nvd/cve-2026-97032"
+        },
+        {
+          "url": "https://access.redhat.com/errata/RHSA-2026:86093"
         },
         {
           "url": "https://access.redhat.com/errata/RHSA-2026:86196"
@@ -17587,7 +17656,7 @@
           "url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2026-97032"
         },
         {
-          "url": "https://errata.almalinux.org/9/ALSA-2026-86196.html"
+          "url": "https://errata.almalinux.org/10/ALSA-2026-86093.html"
         },
         {
           "url": "https://errata.rockylinux.org/RLSA-2026:86196"

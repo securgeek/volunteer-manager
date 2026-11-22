@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:bd7eb37e-acc5-454d-9adf-7e13d4d9a679",
+  "serialNumber": "urn:uuid:bd41460e-d2d4-4a92-9e43-314a124c3f29",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-22T02:44:49+00:00",
+    "timestamp": "2026-11-22T23:34:45+00:00",
     "tools": {
       "components": [
         {
@@ -20,22 +20,18 @@
       ]
     },
     "component": {
-      "bom-ref": "pkg:oci/bsides_mailrelay@sha256:85d0fd72de81122f96c01e9339198f48cae6a9a325d3b90b0605ca11e92d9ad4?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
+      "bom-ref": "pkg:oci/bsides_mailrelay@sha256:eea7b9d01198c70ad24813ffe48cf6e26a1977b8c1dd59e0995ccef825764096?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
       "type": "container",
       "name": "localhost/bsides_mailrelay:latest",
-      "purl": "pkg:oci/bsides_mailrelay@sha256:85d0fd72de81122f96c01e9339198f48cae6a9a325d3b90b0605ca11e92d9ad4?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
+      "purl": "pkg:oci/bsides_mailrelay@sha256:eea7b9d01198c70ad24813ffe48cf6e26a1977b8c1dd59e0995ccef825764096?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:49ba53dc6dc45f24852c9afb8fe6b71b496b581e21c2944468563e023b820f65"
+          "value": "sha256:1fd34827480a803223168312f0d2ce88bfa0de739d91ce236d419ad9733a0ba1"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:53ba999d750b82f462193af999f3fcaf4b3c3a6c13b4e92ca10154cfe28e899c"
-        },
-        {
-          "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:5958f0667abd8699a177040d2878667a22531bdf21d5464f2d8404854d4a45c6"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -47,15 +43,19 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:796f57d315868285a0d6687fda0c7ba194b69ba213e25f64eff6d727ce569750"
+          "value": "sha256:9150b512b4b3400a18c09c272bf2a4e3843f5ae8f366af31c66058d0eee34ef7"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:a5d3271739d2d8ea1f1ef972ed849135ab4d06356fe430d2a527f90b3968ee4c"
         },
         {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:ae33c7d9bea8ab0606e5b1a70d6d112c8a3279de01f9a2e69210f8e9ecb0cdd3"
+        },
+        {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:0e860d73f88851d8364405468e6826f85dce9d980ee0d6242223537792798da9"
+          "value": "sha256:f52212bb5e9921ade823ef9fcf712e87bb9275acbac73ee7e05fa92b7babd86d"
         },
         {
           "name": "aquasecurity:trivy:Labels:io.buildah.version",
@@ -67,7 +67,7 @@
         },
         {
           "name": "aquasecurity:trivy:RepoDigest",
-          "value": "localhost/bsides_mailrelay@sha256:85d0fd72de81122f96c01e9339198f48cae6a9a325d3b90b0605ca11e92d9ad4"
+          "value": "localhost/bsides_mailrelay@sha256:eea7b9d01198c70ad24813ffe48cf6e26a1977b8c1dd59e0995ccef825764096"
         },
         {
           "name": "aquasecurity:trivy:RepoTag",
@@ -79,14 +79,14 @@
         },
         {
           "name": "aquasecurity:trivy:Size",
-          "value": "61324288"
+          "value": "61325312"
         }
       ]
     }
   },
   "components": [
     {
-      "bom-ref": "4c911f4d-a1ca-415b-b191-0155b3a932f1",
+      "bom-ref": "9c4933ca-d939-477b-ae48-1198c0a99ee3",
       "type": "operating-system",
       "name": "alpine",
       "version": "3.24.4",
@@ -703,7 +703,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:49ba53dc6dc45f24852c9afb8fe6b71b496b581e21c2944468563e023b820f65"
+          "value": "sha256:ae33c7d9bea8ab0606e5b1a70d6d112c8a3279de01f9a2e69210f8e9ecb0cdd3"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -883,7 +883,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:49ba53dc6dc45f24852c9afb8fe6b71b496b581e21c2944468563e023b820f65"
+          "value": "sha256:ae33c7d9bea8ab0606e5b1a70d6d112c8a3279de01f9a2e69210f8e9ecb0cdd3"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1403,7 +1403,7 @@
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:49ba53dc6dc45f24852c9afb8fe6b71b496b581e21c2944468563e023b820f65"
+          "value": "sha256:ae33c7d9bea8ab0606e5b1a70d6d112c8a3279de01f9a2e69210f8e9ecb0cdd3"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1476,7 +1476,7 @@
   ],
   "dependencies": [
     {
-      "ref": "4c911f4d-a1ca-415b-b191-0155b3a932f1",
+      "ref": "9c4933ca-d939-477b-ae48-1198c0a99ee3",
       "dependsOn": [
         "pkg:apk/alpine/.python-rundeps@20261105.192804?arch=noarch&distro=3.24.4",
         "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64&distro=3.24.4",
@@ -1688,9 +1688,9 @@
       ]
     },
     {
-      "ref": "pkg:oci/bsides_mailrelay@sha256:85d0fd72de81122f96c01e9339198f48cae6a9a325d3b90b0605ca11e92d9ad4?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
+      "ref": "pkg:oci/bsides_mailrelay@sha256:eea7b9d01198c70ad24813ffe48cf6e26a1977b8c1dd59e0995ccef825764096?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_mailrelay",
       "dependsOn": [
-        "4c911f4d-a1ca-415b-b191-0155b3a932f1"
+        "9c4933ca-d939-477b-ae48-1198c0a99ee3"
       ]
     }
   ],

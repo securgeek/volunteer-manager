@@ -3919,7 +3919,7 @@ see a row whose rev implies it was already sent.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The SQLite file, from <code>PORTAL_DB_PATH</code>.</p>
+                <p>The SQLite file, from <code>PORTAL_DB</code> (<code>settings.db_path</code>).</p>
               </div>
             </td>
             <td>
@@ -3947,7 +3947,7 @@ see a row whose rev implies it was already sent.</p>
 <span class="w">    </span><span class="sd">"""Set the database path used by get_db, and migrate it once at startup.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        db_path: The SQLite file, from `PORTAL_DB_PATH`.</span>
+<span class="sd">        db_path: The SQLite file, from `PORTAL_DB` (`settings.db_path`).</span>
 <span class="sd">    """</span>
     <span class="n">_config</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="n">db_path</span>
     <span class="n">conn</span> <span class="o">=</span> <span class="n">connect</span><span class="p">(</span><span class="n">db_path</span><span class="p">)</span>
