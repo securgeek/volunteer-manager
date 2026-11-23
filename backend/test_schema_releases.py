@@ -87,7 +87,14 @@ def test_a_database_from_before_1_0_is_refused(pg):
         dbm.migrate(pg)
 
 
+def _only_1_0(monkeypatch):
+    """Make the code believe 1.0 is the only release, so a test can add its own after it."""
+    monkeypatch.setattr(dbm, "SCHEMA_RELEASES", dbm.SCHEMA_RELEASES[:1])
+    monkeypatch.setattr(dbm, "SCHEMA_VERSION", dbm.BASELINE_VERSION)
+
+
 def test_a_release_file_runs_once_and_again_while_in_progress(pg, tmp_path, monkeypatch):
+    _only_1_0(monkeypatch)
     dbm.migrate(pg)                                         # a 1.0 database
     path = _release_file(tmp_path, """
         -- One of 1.1's changes; safe to run twice, as a release in progress must be.
@@ -117,6 +124,7 @@ def test_a_release_file_runs_once_and_again_while_in_progress(pg, tmp_path, monk
 
 
 def test_a_1_0_database_is_upgraded_through_every_newer_release(pg, tmp_path, monkeypatch):
+    _only_1_0(monkeypatch)
     dbm.migrate(pg)
     a = tmp_path / "a.sql"
     a.write_text("CREATE TABLE IF NOT EXISTS probe_a (x INT);", encoding="utf-8")
@@ -132,3 +140,29 @@ def test_a_1_0_database_is_upgraded_through_every_newer_release(pg, tmp_path, mo
         assert [r["column_name"] for r in cur.fetchall()] == ["x", "y"]
     pg.rollback()
     assert _version(pg) == 21
+
+
+# ── the real releases ─────────────────────────────────────────────────────────
+
+def _tables(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public'")
+        names = {r["table_name"] for r in cur.fetchall()}
+    conn.rollback()
+    return names
+
+
+def test_1_1_adds_audit_events_to_a_1_0_database(pg):
+    dbm.migrate(pg)
+    # Wind it back to how a 1.0 database looks: no audit_events, version 19.
+    with pg.cursor() as cur:
+        cur.execute("DROP TABLE audit_events")
+        cur.execute("DELETE FROM schema_versions")
+        cur.execute("INSERT INTO schema_versions (version) VALUES (19)")
+    pg.commit()
+    assert "audit_events" not in _tables(pg)
+    dbm.migrate(pg)
+    assert "audit_events" in _tables(pg) and _version(pg) == 20
+    dbm.migrate(pg)                                         # in progress: re-runs cleanly
+    assert _version(pg) == 20

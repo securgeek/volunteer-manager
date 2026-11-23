@@ -176,3 +176,37 @@ def test_every_audit_call_names_a_registered_code_as_a_literal():
         elif first.value not in audit.EVENTS:
             bad.append(f"{path}:{line}: unregistered event code {first.value!r}")
     assert not bad, "\n".join(bad)
+
+
+# ── the audit_events copy, without a database ─────────────────────────────────
+
+def test_no_database_is_logged_and_the_file_still_written(log_file, monkeypatch, caplog):
+    def no_pool():
+        raise RuntimeError("connection refused")
+    monkeypatch.setattr(audit.db, "get_conn", no_pool)
+    audit.configure(str(log_file), to_db=True)
+    audit.audit("auth.logout", _request(), None, "Signed out")      # no raise
+    assert len(_lines(log_file)) == 1
+    assert "no database connection for auth.logout" in caplog.text
+
+
+def test_nothing_is_built_when_both_outputs_are_off(monkeypatch):
+    audit.configure(None)
+    monkeypatch.setattr(audit, "build_record", lambda *a, **k: pytest.fail("built a record"))
+    audit.audit("auth.logout", _request(), None, "Signed out")
+
+
+@pytest.mark.parametrize("raw, days", [
+    (None, 365), ("30", 30), ("0", 0), (" 90 ", 90), ("-1", 365), ("forever", 365), ("", 365),
+])
+def test_retention_days_reads_the_environment(monkeypatch, raw, days):
+    if raw is None:
+        monkeypatch.delenv("AUDIT_RETENTION_DAYS", raising=False)
+    else:
+        monkeypatch.setenv("AUDIT_RETENTION_DAYS", raw)
+    assert audit.retention_days() == days
+
+
+def test_no_nul_reaches_through_nested_values():
+    assert audit._no_nul({"a\x00": ["x\x00", {"b": "\x00"}], "n": 3}) == {
+        "a\ufffd": ["x\ufffd", {"b": "\ufffd"}], "n": 3}

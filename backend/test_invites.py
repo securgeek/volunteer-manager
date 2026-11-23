@@ -406,11 +406,28 @@ def test_successes_from_one_address_never_lock_it(app):
 
 @pytest.fixture
 def audit_file(tmp_path):
-    """Turn the audit log on for one test; return a function that reads its records."""
+    """Turn the audit log on, file and table, for one test; return a function that reads the
+    file's records. The table starts empty."""
+    _sql("DELETE FROM audit_events")
     path = tmp_path / "audit.jsonl"
-    audit.configure(str(path))
+    audit.configure(str(path), to_db=True)
     yield lambda: [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     audit.configure(None)
+
+
+def _audit_rows():
+    """Every audit_events row, oldest first, as dicts, with ts formatted as the file has it."""
+    import psycopg2
+    conn = psycopg2.connect(**dbm._dsn())                 # RealDictCursor: rows are dicts
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT event, severity, source, actor, user_id, ip, method, path, "
+                        "message, data, "
+                        "to_char(ts, 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS ts "
+                        "FROM audit_events ORDER BY id")
+            return cur.fetchall()
+    finally:
+        conn.close()
 
 
 def test_a_hostile_username_cannot_forge_an_audit_line(app, audit_file):
@@ -451,3 +468,63 @@ def test_a_password_reset_request_is_audited_without_the_address(app, audit_file
     (rec,) = audit_file()
     assert rec["event"] == "password.reset.request" and rec["data"]["username"] == "alice"
     assert "@" not in json.dumps(rec)
+
+
+# ── the audit_events table ────────────────────────────────────────────────────
+
+def test_every_audit_line_is_also_a_row_with_the_same_content(app, audit_file):
+    c = _client(app)
+    c.post("/api/login", data={"username": "bob", "password": "wrong"},
+           headers={"X-Forwarded-For": "198.51.100.7"})
+    c.post("/api/login", data={"username": "bob", "password": "bob-password"})
+    lines, rows = audit_file(), _audit_rows()
+    assert len(rows) == len(lines) == 2
+    for line, row in zip(lines, rows):
+        assert row["source"] == "backend"
+        for k in ("event", "severity", "actor", "user_id", "ip", "method", "path", "message",
+                  "data", "ts"):
+            assert row[k] == line[k], k
+    assert rows[0]["ip"] == "198.51.100.7" and rows[0]["data"]["reason"] == "bad_password"
+
+
+def test_a_nul_is_kept_in_the_file_and_replaced_in_the_table(app, audit_file):
+    _client(app).post("/api/login", data={"username": "eve\x00x", "password": "x"})
+    assert audit_file()[0]["data"]["username"] == "eve\x00x"
+    assert _audit_rows()[0]["data"]["username"] == "eve\ufffdx"
+
+
+def test_a_rolled_back_request_still_leaves_its_audit_row(app, audit_file):
+    from starlette.requests import Request
+    req = Request({"type": "http", "method": "POST", "path": "/api/x", "headers": [],
+                   "query_string": b"", "client": ("10.0.0.1", 1)})
+    conn = dbm.get_conn()
+    try:
+        conn.execute("UPDATE users SET failed_login_cnt = 99 WHERE user_id = 'u-bob';")
+        audit.audit("user.role_change", req, None, "Changed a role")
+        conn._conn.rollback()                             # the request fails after auditing
+    finally:
+        dbm.put_conn(conn)
+    assert [r["event"] for r in _audit_rows()] == ["user.role_change"]
+    assert _sql("SELECT failed_login_cnt FROM users WHERE user_id = 'u-bob'")[0][0] != 99
+
+
+def test_prune_keeps_the_retention_window(app, audit_file, monkeypatch):
+    for days in (1, 29, 31, 400):
+        _sql("INSERT INTO audit_events (ts, event, severity, message) VALUES "
+             "((NOW() AT TIME ZONE 'UTC') - make_interval(days => %s), 'auth.logout', 'info', "
+             "%s)", (days, f"{days} days old"))
+
+    def kept():
+        return sorted(r["message"] for r in _audit_rows())
+
+    conn = dbm.get_conn()
+    try:
+        monkeypatch.setenv("AUDIT_RETENTION_DAYS", "0")          # keep everything
+        assert audit.prune(conn) == 0 and len(kept()) == 4
+        monkeypatch.delenv("AUDIT_RETENTION_DAYS")               # default 365
+        assert audit.prune(conn) == 1 and "400 days old" not in kept()
+        monkeypatch.setenv("AUDIT_RETENTION_DAYS", "30")
+        assert audit.prune(conn) == 1
+        assert kept() == ["1 days old", "29 days old"]
+    finally:
+        dbm.put_conn(conn)

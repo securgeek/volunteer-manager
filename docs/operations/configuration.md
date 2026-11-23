@@ -23,6 +23,12 @@ The backend also reads `DB_HOST`, `DB_PORT`, `DB_NAME` and `DB_USER`. compose se
 the `postgres` service, so they don't belong in `.env`. The portal's SQLite file is
 `PORTAL_DB`, set to `/data/portal.db` on the `portal_data` volume.
 
+## Audit log
+
+| Setting | Read by | Default | What it does |
+|---|---|---|---|
+| `AUDIT_RETENTION_DAYS` | backend | `365` | How many days the `audit_events` table keeps an event. It's pruned at startup and once a day. `0` keeps everything. `logs/audit.jsonl` is never pruned: it's the complete record (see [Deployment](deployment.md) for rotating it). |
+
 ## Shared between the backend and the portal
 
 These must be **identical** on both sides. The backend and the portal compare

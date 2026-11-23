@@ -55,6 +55,32 @@ def quiet_polls() -> None:
         access.addFilter(QuietPolls())
 
 
+log = logging.getLogger("main")
+
+PRUNE_EVERY_SEC = 24 * 3600
+
+
+def _prune_audit() -> None:
+    """Prune `audit_events` once (audit.prune). Logs and swallows a failure."""
+    conn = _db.get_conn()
+    try:
+        gone = audit.prune(conn)
+        if gone:
+            log.info("audit: pruned %d event(s) older than %d days", gone, audit.retention_days())
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Deliberately broad: a failed prune must not stop the loop; it tries again tomorrow.
+        log.error("audit: prune failed: %s", exc)
+    finally:
+        _db.put_conn(conn)
+
+
+async def _prune_audit_daily() -> None:
+    """Prune `audit_events` now and then every PRUNE_EVERY_SEC, until cancelled."""
+    while True:
+        await asyncio.to_thread(_prune_audit)
+        await asyncio.sleep(PRUNE_EVERY_SEC)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start the app's background parts, and stop them on shutdown.
@@ -71,7 +97,11 @@ async def lifespan(app: FastAPI):
     # No-op unless PORTAL_SYNC_URL and the sync keys are set, so a deployment without a
     # portal behaves exactly as it did before.
     portal_sync.start(loop)
+    # Only when the audit table is in use (main below); tests start the app without it.
+    pruner = loop.create_task(_prune_audit_daily()) if audit.configured_to_db() else None
     yield
+    if pruner:
+        pruner.cancel()
 
 
 app = FastAPI(title="Conference Scheduler", lifespan=lifespan)
@@ -112,7 +142,7 @@ if __name__ == "__main__":
                         default="/app/logs/audit.jsonl")
 
     args = parser.parse_args()
-    audit.configure(args.audit)
+    audit.configure(args.audit, to_db=True)
 
     # Without this the root logger has no handler, so Python's last-resort handler emits
     # WARNING and above only — every log.info() in this application is silently discarded,

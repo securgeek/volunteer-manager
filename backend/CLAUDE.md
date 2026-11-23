@@ -56,6 +56,16 @@ the browser while working fine when called directly. It's a plain string prefix:
   - Lines are `json.dumps(..., ensure_ascii=True)`, so no input can forge a line: newlines,
     U+2028/U+2029/U+0085 and bidi overrides all come out as escapes. That was the bug in
     the old free-text `audit.log`, which wrote a failed login's username verbatim.
+  - **Each event is also a row in `audit_events`** (1.1 migration) when configured with
+    `to_db=True`, which only `main.py` does. Written by `_store` on its **own pooled
+    connection with its own commit** (`db.get_conn`/`put_conn`), so a request that rolls
+    back still leaves its row. The file is written first and is the complete record; the
+    table is pruned to `AUDIT_RETENTION_DAYS` (default 365, 0 = keep) by `audit.prune()`,
+    which `main.lifespan` runs at startup and every 24 h. `source` is `backend`, or
+    `portal` for portal events pulled in later. NUL can't go into Postgres TEXT/JSONB, so
+    the row has U+FFFD where the file has `\u0000`.
+  - **A NUL in any query parameter makes psycopg2 raise** (a 500). `/api/login` treats a
+    username with one as unknown; other routes still need the planned request middleware.
   - A write failure is logged and swallowed; auditing never fails a request.
   - `client_ip()` lives here (not in `api_auth`, which re-exports it) so `audit.py` imports
     only `db` and nothing imports in a circle.

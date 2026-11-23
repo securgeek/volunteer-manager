@@ -145,3 +145,26 @@ touched. Once the new version has settled, `podman volume rm` the old volume and
 Both database dumps hold volunteer names and email ciphertext. Keep them owner-only
 (`chmod 600`), and don't leave them in `~/Scheduler`, where an rsync with `--delete` would
 remove them.
+
+### Rotating the audit log
+
+`logs/audit.jsonl` grows for as long as the site runs; the backend never trims it (the
+`audit_events` table, which the admin site reads, is pruned separately by
+`AUDIT_RETENTION_DAYS`). The backend opens the file for each line it writes, so an ordinary
+rename-based rotation is safe, with no restart and no `copytruncate`. For example, in
+`/etc/logrotate.d/bsides` (or a user crontab running `logrotate` with its own state file):
+
+```
+/home/<user>/Scheduler/logs/audit.jsonl {
+    monthly
+    rotate 24
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640
+}
+```
+
+Use the owner `ls -ln logs/audit.jsonl` shows: the container's `:U` mount maps it to the
+backend's uid.

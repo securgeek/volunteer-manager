@@ -17,11 +17,18 @@ code names a registered code as a string literal, so a typo fails a test rather 
 producing a code no alert rule or filter knows about. In production an unknown code is still
 recorded, flagged `"unregistered": true`, because losing an audit line would be worse.
 
-A failure to write is logged and swallowed: the audit log must never be the reason a request
-fails.
+Each event also becomes a row in `audit_events` (when `configure(..., to_db=True)`, as in
+`main.py`), for the admin site's Audit Log and the alert rules. The row is written on its own
+pooled connection with its own commit, so a request that rolls back still leaves its row.
+The file is the complete record; the table is pruned to `AUDIT_RETENTION_DAYS` (default 365,
+0 keeps everything) by `prune()`, which `main.py` runs at startup and daily.
+
+A failure to write either is logged and swallowed: the audit log must never be the reason a
+request fails.
 """
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -29,6 +36,7 @@ from typing import NamedTuple
 
 from fastapi import Request
 
+import db
 from db import _session_cache
 
 log = logging.getLogger(__name__)
@@ -133,22 +141,74 @@ EVENTS: dict[str, Event] = {
 
 @dataclass
 class _AuditConfig:
-    """Module state: where the log goes. `path` None turns auditing off (tests, scripts)."""
+    """Module state: where the log goes. Both off by default (tests, scripts)."""
 
     path: str | None = None
+    to_db: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 _config = _AuditConfig()
 
+_INSERT_SQL = (
+    "INSERT INTO audit_events (ts, event, severity, actor, user_id, ip, method, path, "
+    "message, data) VALUES ((?::timestamptz AT TIME ZONE 'UTC'), ?, ?, ?, ?, ?, ?, ?, ?, "
+    "?::jsonb);"
+)
+# A retention of 0 days keeps everything: the flag makes the DELETE match nothing.
+_PRUNE_SQL = (
+    "DELETE FROM audit_events WHERE ? > 0 "
+    "AND ts < (NOW() AT TIME ZONE 'UTC') - make_interval(days => ?);"
+)
 
-def configure(path: str | None) -> None:
-    """Set the audit log's file. `main.py` calls it with `--audit` before uvicorn starts.
+
+def configure(path: str | None, to_db: bool = False) -> None:
+    """Set where the audit log goes. `main.py` calls it with `--audit` before uvicorn starts.
 
     Args:
-        path: The JSONL file to append to, or None to turn auditing off.
+        path: The JSONL file to append to, or None for no file.
+        to_db: Also write each event to the `audit_events` table.
     """
     _config.path = path
+    _config.to_db = to_db
+
+
+def configured_to_db() -> bool:
+    """Whether events also go to the `audit_events` table (`configure(..., to_db=True)`).
+
+    Returns:
+        True when they do.
+    """
+    return _config.to_db
+
+
+def retention_days() -> int:
+    """`AUDIT_RETENTION_DAYS`: how long `audit_events` keeps a row. 0 keeps them all.
+
+    Returns:
+        The number of days, 365 when unset, and 365 (with a warning) when it isn't a whole
+        number of zero or more.
+    """
+    raw = os.getenv("AUDIT_RETENTION_DAYS", "365").strip()
+    if raw.isdigit():
+        return int(raw)
+    log.warning("audit: AUDIT_RETENTION_DAYS=%r isn't a whole number of days; using 365", raw)
+    return 365
+
+
+def prune(conn: "db.PgClient") -> int:
+    """Delete `audit_events` rows older than `retention_days()`, and commit.
+
+    Args:
+        conn: A database connection.
+
+    Returns:
+        How many rows went.
+    """
+    days = retention_days()
+    cur = conn.execute(_PRUNE_SQL, (days, days))
+    conn.commit()
+    return cur.rowcount
 
 
 def client_ip(request: Request) -> str:
@@ -222,6 +282,48 @@ def build_record(event: str, request: Request, s_id: str | None, message: str,
     return record
 
 
+def _no_nul(value):
+    """`value` with every NUL character replaced by U+FFFD, through dicts and lists.
+
+    Postgres can't store NUL in TEXT or JSONB. The file keeps the exact text, escaped.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "\ufffd")
+    if isinstance(value, dict):
+        return {_no_nul(k): _no_nul(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_no_nul(v) for v in value]
+    return value
+
+
+def _store(record: dict) -> None:
+    """Insert one record into `audit_events` on a connection of its own, and commit. Logs and
+    swallows a failure.
+
+    Args:
+        record: A record from `build_record`, already through a JSON round trip (so every
+            value is plain JSON).
+    """
+    rec = _no_nul(record)
+    try:
+        conn = db.get_conn()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Deliberately broad: no pool (bad DB_* settings, database down) raises several
+        # kinds, and none of them may fail the request being audited.
+        log.error("audit: no database connection for %s event: %s", rec["event"], exc)
+        return
+    try:
+        conn.execute(_INSERT_SQL, (
+            rec["ts"], rec["event"], rec["severity"], rec["actor"], rec["user_id"], rec["ip"],
+            rec["method"], rec["path"], rec["message"], json.dumps(rec["data"])))
+        conn.commit()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Deliberately broad, for the same reason: the row is a copy of the file's line.
+        log.error("audit: could not store %s event: %s", rec["event"], exc)
+    finally:
+        db.put_conn(conn)
+
+
 def audit(event: str, request: Request, s_id: str | None, message: str,
           who: str | None = None, **data) -> None:
     """Append one event to the audit log. Never raises.
@@ -235,7 +337,7 @@ def audit(event: str, request: Request, s_id: str | None, message: str,
         who: A label for a caller with no session, such as an export API key.
         **data: Structured details; see `build_record`.
     """
-    if not _config.path:
+    if not (_config.path or _config.to_db):
         return
     if event not in EVENTS:
         log.warning("audit: unregistered event code %r", event)
@@ -245,7 +347,14 @@ def audit(event: str, request: Request, s_id: str | None, message: str,
         # bidi overrides such as U+202E reorder text in a terminal. jq decodes them all.
         line = json.dumps(build_record(event, request, s_id, message, who, **data),
                           ensure_ascii=True, default=str)
-        with _config.lock, open(_config.path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except (OSError, TypeError, ValueError) as exc:
-        log.error("audit: could not write %s event: %s", event, exc)
+    except (TypeError, ValueError) as exc:
+        log.error("audit: could not encode %s event: %s", event, exc)
+        return
+    if _config.path:
+        try:
+            with _config.lock, open(_config.path, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError as exc:
+            log.error("audit: could not write %s event: %s", event, exc)
+    if _config.to_db:
+        _store(json.loads(line))

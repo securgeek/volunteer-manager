@@ -112,6 +112,9 @@ jq -c 'select(.severity == "high" or .severity == "medium")' logs/audit.jsonl
 jq -r '.ip' logs/audit.jsonl | sort | uniq -c | sort -rn | head        # busiest addresses
 ```
 
+Each event is also a row in the `audit_events` table, which the admin site's Audit Log reads.
+The table keeps `AUDIT_RETENTION_DAYS` (365 by default); the file keeps everything.
+
 The list of event codes and their severities is `EVENTS` in `backend/audit.py`. The old
 free-text `logs/audit.log` (before this change) is left as it was and no longer written.
 

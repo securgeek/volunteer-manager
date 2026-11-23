@@ -108,7 +108,9 @@ def login(
     if refused:
         raise refused
 
-    row = db.execute(
+    # Postgres can't take a NUL in a query parameter (psycopg2 raises, which was a 500). No
+    # username has one, so it's simply an unknown user.
+    row = None if "\x00" in username else db.execute(
         "SELECT user_id, username, password_hash, failed_login_cnt, role FROM users "
         "WHERE username = ?;",
         (username,)
