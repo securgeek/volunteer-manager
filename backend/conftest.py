@@ -27,3 +27,17 @@ os.environ.setdefault("PORTAL_SYNC_URL", "https://portal.test")
 
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
+
+
+import pytest  # noqa: E402  (after the environment setup above, deliberately)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_login_limits():
+    """Every test starts with no failed sign-ins counted. All test clients share one address,
+    so without this, failures in one module would throttle sign-ins in the next. Only once
+    `routers.auth` is loaded: importing it here would freeze portal_sync's settings early."""
+    auth = sys.modules.get("routers.auth")
+    if auth is not None:
+        auth.reset_login_limits()
+    yield

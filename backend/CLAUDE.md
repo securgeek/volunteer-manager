@@ -7,6 +7,7 @@ backend/
 ├── main.py          ← App factory, CLI entry point, /api/health
 ├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker
 ├── audit.py         ← The audit log: audit(), the EVENTS registry, client_ip
+├── ratelimit.py     ← SlidingWindow: in-memory per-key limits (sign-in, password reset)
 ├── checkin_codes.py ← Shift check-in codes (HMAC) and the early/late rule; no DB
 ├── api_auth.py      ← Export API keys: TokenChecker(scope), IP allow-lists, failure limiter
 ├── names.py         ← split_name / export_name ("Handle [First L.]")
@@ -59,6 +60,18 @@ the browser while working fine when called directly. It's a plain string prefix:
   - `client_ip()` lives here (not in `api_auth`, which re-exports it) so `audit.py` imports
     only `db` and nothing imports in a circle.
 - `RoleChecker("organizer")` as a Depends raises 401 if unauthenticated, 403 if wrong role.
+- **Failed password sign-ins are rate limited** (`routers/auth.py`, `LOGIN_LIMITS`, 15-minute
+  sliding windows in memory, `ratelimit.SlidingWindow`): 5 per username from one address, 20
+  per address, 30 per username from anywhere. Checked **before** the password, so a refused
+  request (429 with `Retry-After`) never tests one, and it doesn't count. Only failures
+  count, because every check-in laptop at the venue shares one public address; a success
+  clears its username-and-address count. The per-username-only limit is deliberately high:
+  set low, anyone who knows a username could lock its owner out from anywhere. A throttled
+  client is audited once per key per window (`auth.login.throttled`), not per request.
+  `reset_login_limits()` clears it all; `conftest.py` does so before every test, since all
+  test clients share one address.
+- **An unknown username is verified against a dummy Argon2 hash**, so it takes as long as a
+  wrong password and response time doesn't reveal which usernames exist.
 - `auth.start_session()` is the one place a session is created. The password login and the
   passkey login both call it, so the two produce identical sessions.
 

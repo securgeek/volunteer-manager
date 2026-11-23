@@ -53,6 +53,7 @@ EVENTS: dict[str, Event] = {
     # Sign-in and sessions
     "auth.login.ok": Event("info", "Signed in with a password"),
     "auth.login.fail": Event("low", "Password sign-in refused"),
+    "auth.login.throttled": Event("medium", "Password sign-in refused: too many failures"),
     "auth.logout": Event("info", "Signed out"),
     "auth.passkey.login.ok": Event("info", "Signed in with a passkey"),
     "auth.passkey.login.fail": Event("low", "Passkey sign-in refused"),

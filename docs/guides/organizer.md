@@ -185,3 +185,9 @@ without a password.
 If you forget your password, **Send Reset Link** on the sign-in page mails a link to the
 address on your account. An organizer can also set a new password for you under
 **Admin → Users**.
+
+After **5 wrong passwords in 15 minutes**, the sign-in page stops accepting that username
+from your network for a while and says how long to wait. Waiting more is the only fix; more
+attempts don't help. A passkey or a reset link still works in the meantime, and so does
+signing in from another network. Successful sign-ins never count, so a check-in desk full of
+laptops on the venue's network can't lock itself out.

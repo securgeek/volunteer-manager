@@ -14,17 +14,15 @@ mailed through the portal (portal_sync.send_admin_mail); it opens /admin/reset?t
 """
 import logging
 import secrets
-import threading
-import time
-from collections import defaultdict, deque
 
 from argon2 import PasswordHasher
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import portal_sync
 from api_auth import rate_key
-from audit import audit
+from audit import audit, client_ip
 from db import PgClient, _session_cache, get_app_kv, get_db
+from ratelimit import SlidingWindow
 from routers.invites import token_hash
 
 router = APIRouter()
@@ -35,29 +33,7 @@ RATE_LIMIT, RATE_WINDOW_SEC = 5, 15 * 60
 GENERIC = ("If that account has an email address on file, a reset link is on its way. "
            "It works once, for an hour.")
 
-_hits: dict = defaultdict(deque)
-_hits_lock = threading.Lock()
-
-
-def _allowed(*keys: str) -> bool:
-    """A sliding window per key; False if any key is over the limit. Counts only if allowed."""
-    now = time.monotonic()
-    with _hits_lock:
-        for k in keys:
-            q = _hits[k]
-            while q and q[0] <= now - RATE_WINDOW_SEC:
-                q.popleft()
-            if len(q) >= RATE_LIMIT:
-                return False
-        for k in keys:
-            _hits[k].append(now)
-    return True
-
-
-def _client_ip(request: Request) -> str:
-    # nginx sends a single resolved X-Forwarded-For (frontend/CLAUDE.md → Reverse proxy).
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
+_requests = SlidingWindow(RATE_LIMIT, RATE_WINDOW_SEC)
 
 
 # A reset link is live while unused and unexpired. Each query below spells that out,
@@ -79,8 +55,8 @@ async def request_reset(request: Request, username: str = Form(...),
         HTTPException 429: Too many requests for this username or from this address.
     """
     username = username.lower().strip()
-    ip = _client_ip(request)
-    if not _allowed(f"u:{username}", f"ip:{rate_key(ip)}"):
+    ip = client_ip(request)
+    if not _requests.allow(f"u:{username}", f"ip:{rate_key(ip)}"):
         raise HTTPException(status_code=429, detail="Too many reset requests. Try again later.")
     row = db.execute("SELECT user_id, email FROM users WHERE username = ?;",
                      (username,)).fetchone()

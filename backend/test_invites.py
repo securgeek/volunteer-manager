@@ -87,7 +87,7 @@ def sent(monkeypatch):
     monkeypatch.setattr(portal_sync, "send_admin_mail", fake)
     calls.fake = fake
     from routers import password_reset
-    password_reset._hits.clear()
+    password_reset._requests.clear()
     yield calls
 
 
@@ -349,6 +349,59 @@ def test_organizers_set_anyones_email(app):
 
 
 
+# ── failed sign-ins are rate limited ──────────────────────────────────────────
+
+def _login(app, user, password, ip="10.9.0.1"):
+    return _client(app).post("/api/login", data={"username": user, "password": password},
+                             headers={"X-Forwarded-For": ip})
+
+
+def test_five_failures_for_one_user_from_one_address_lock_that_pair(app):
+    for _ in range(5):
+        assert _login(app, "bob", "wrong").status_code == 401
+    r = _login(app, "bob", "bob-password")                     # even the right password
+    assert r.status_code == 429 and 0 < int(r.headers["Retry-After"]) <= 15 * 60
+    assert _login(app, "bob", "bob-password", ip="10.9.0.2").status_code == 200   # elsewhere
+    assert _login(app, "alice", "alice-password").status_code == 200              # others
+
+
+def test_twenty_failures_from_one_address_lock_the_address(app):
+    for i in range(20):
+        assert _login(app, f"nobody{i}", "x", ip="10.9.1.1").status_code == 401
+    assert _login(app, "alice", "alice-password", ip="10.9.1.1").status_code == 429
+    assert _login(app, "alice", "alice-password", ip="10.9.1.2").status_code == 200
+
+
+def test_an_ipv6_64_counts_as_one_address(app):
+    for i in range(20):
+        assert _login(app, f"v6-{i}", "x", ip=f"2001:db8:7:7::{i + 1:x}").status_code == 401
+    assert _login(app, "alice", "alice-password", ip="2001:db8:7:7::ff").status_code == 429
+
+
+def test_a_spread_out_guess_at_one_username_hits_the_ceiling(app):
+    for i in range(30):
+        assert _login(app, "bob", "wrong", ip=f"10.9.2.{i + 1}").status_code == 401
+    assert _login(app, "bob", "bob-password", ip="10.9.3.1").status_code == 429
+
+
+def test_success_clears_the_pair_and_refusals_do_not_count(app):
+    for _ in range(4):
+        _login(app, "bob", "wrong")
+    assert _login(app, "bob", "bob-password").status_code == 200     # clears the 4
+    for _ in range(4):
+        assert _login(app, "bob", "wrong").status_code == 401         # 4 again, not 8
+    assert _login(app, "bob", "wrong").status_code == 401             # the 5th
+    for _ in range(10):
+        assert _login(app, "bob", "wrong").status_code == 429         # refused, not counted
+    assert _login(app, "bob", "bob-password", ip="10.9.0.9").status_code == 200
+
+
+def test_successes_from_one_address_never_lock_it(app):
+    """The venue: every check-in laptop signs in from one public address."""
+    for _ in range(30):
+        assert _login(app, "bob", "bob-password", ip="10.9.4.1").status_code == 200
+
+
 # ── the audit log, end to end through the real routes ─────────────────────────
 
 @pytest.fixture
@@ -381,6 +434,16 @@ def test_sign_in_failure_success_and_sign_out_are_audited(app, audit_file):
     assert recs[0]["data"]["reason"] == "bad_password" and recs[0]["actor"] is None
     assert recs[1]["actor"] == "bob" and recs[1]["user_id"] == "u-bob"
     assert recs[2]["actor"] == "bob"
+
+
+def test_throttling_is_audited_once_however_hard_a_client_hammers(app, audit_file):
+    for _ in range(5):
+        _login(app, "bob", "wrong")
+    for _ in range(10):
+        assert _login(app, "bob", "wrong").status_code == 429
+    events = [r["event"] for r in audit_file()]
+    assert events == ["auth.login.fail"] * 5 + ["auth.login.throttled"]
+    assert audit_file()[-1]["data"] == {"username": "bob", "limits": ["user_ip"]}
 
 
 def test_a_password_reset_request_is_audited_without_the_address(app, audit_file, sent):

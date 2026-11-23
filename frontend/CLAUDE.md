@@ -416,8 +416,8 @@ proxies `/api` to `backend:5000` (and `/api/portal` to `portal:5001`, the same w
 `portal/CLAUDE.md`, auth invariant 3). nginx resolves the real client with the realip module
 from the **edge's client-IP header** (named in `default.conf`), which the edge sets and
 overwrites, and forwards a single `$remote_addr` value instead of a chain. Not
-`X-Forwarded-For`: the edge appends to that one and keeps whatever prefix the client sent. `audit()` in `backend/db.py` reads the leftmost
-entry, which is that one trusted value.
+`X-Forwarded-For`: the edge appends to that one and keeps whatever prefix the client sent. `client_ip()` in `backend/audit.py` (the audit log and
+every rate limit) reads the leftmost entry, which is that one trusted value.
 
 Keep the trusted sources in `default.conf` to loopback and the container networks — wherever
 the tunnel client's connection appears from after podman's port forward. Only the host and the
@@ -471,7 +471,10 @@ go). Resetting someone else's password, or setting their email, is still UserMan
 
 **Sign-in** (`setup/Login.vue`) has **Forgot password?**, which posts a username to
 `password_reset/request` and shows the server's reply as given: it's the same whether or not
-the account exists or has an email, so the page must not add its own "not found".
+the account exists or has an email, so the page must not add its own "not found". A 429
+from `/api/login` (too many failed sign-ins, `backend/CLAUDE.md` → Session and auth) shows
+its own message with the `Retry-After` wait in minutes, not "Invalid username or password",
+which would only prompt more attempts.
 
 **Users → Invite Someone** (`UserManager.vue`) creates an invite for a role and an optional
 address. The link is shown once with Copy (the server keeps only its hash) and says whether
