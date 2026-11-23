@@ -102,7 +102,19 @@ volunteer, their slots become empty, and radio history keeps the name.
 
 ## Logs
 
-`logs/audit.log` records every write and sign-in, with the username and client address.
+`logs/audit.jsonl` records every write, sign-in, sign-out and refusal, one JSON object per
+line: the time in UTC, an event code such as `auth.login.fail`, its severity, who did it, the
+client address, the request path, a message, and structured details. Read it with `jq`:
+
+```bash
+jq -c 'select(.event == "auth.login.fail")' logs/audit.jsonl          # failed sign-ins
+jq -c 'select(.severity == "high" or .severity == "medium")' logs/audit.jsonl
+jq -r '.ip' logs/audit.jsonl | sort | uniq -c | sort -rn | head        # busiest addresses
+```
+
+The list of event codes and their severities is `EVENTS` in `backend/audit.py`. The old
+free-text `logs/audit.log` (before this change) is left as it was and no longer written.
+
 Successful healthchecks are left out of the access log, and a healthy, idle backend logs
 nothing. A sync problem is logged once as a warning, and recovery as one
 `portal sync healthy` line.

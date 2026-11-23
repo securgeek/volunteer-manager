@@ -11,7 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 
 import checkin_codes
-from db import get_db, RoleChecker, audit, get_app_kv, PgClient
+from audit import audit
+from db import get_db, RoleChecker, get_app_kv, PgClient
 from routers.events import broadcast
 
 router = APIRouter()
@@ -120,7 +121,7 @@ def record_checkin(request: Request, db: PgClient, s_data: dict,
     db.commit()
     broadcast("checkin")
     extra = f" ({timing} {minutes} min, confirmed)" if timing in ("early", "late") else ""
-    audit(request, request.session.get("session_id"),
+    audit("checkin.ok", request, request.session.get("session_id"),
           f"Checked in vol_id={vol_id} for {slot_key}{extra}.")
     return {**result, "checked_in": True}
 
@@ -152,7 +153,8 @@ def scan_checkin(
     """
     found = checkin_codes.verify_code(checkin_key(db), code)
     if not found:
-        audit(request, request.session.get("session_id"), "Rejected a check-in code.")
+        audit("checkin.code_rejected", request, request.session.get("session_id"),
+              "Rejected a check-in code.")
         raise HTTPException(status_code=400, detail="That isn't a valid check-in code.")
     vol_id, slot_key = found
     return record_checkin(request, db, s_data, vol_id, slot_key, force)
@@ -180,5 +182,6 @@ def rotate_checkin_key(
         (secrets.token_hex(32),)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), "Rotated the check-in key.")
+    audit("checkin.key_rotate", request, request.session.get("session_id"),
+          "Rotated the check-in key.")
     return {"ok": True}

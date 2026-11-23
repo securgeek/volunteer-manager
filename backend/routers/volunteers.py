@@ -12,7 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import JSONResponse, Response
 
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 from portal_sync import email_hmac
 from routers.events import broadcast
 from routers.checkin import record_checkin
@@ -212,7 +213,8 @@ def add_vol(
         (vol_id, vol_name, time_pref, add_time, email_enc, addr_hash)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Added volunteer {vol_id}: {vol_name}")
+    audit("volunteer.add", request, request.session.get("session_id"),
+          f"Added volunteer {vol_id}: {vol_name}")
 
     return JSONResponse(status_code=201, content={
         "key": vol_id, "name": vol_name, "requested": time_pref,
@@ -275,7 +277,8 @@ def fill_email_hmac(
     db.execute("UPDATE volunteers SET email_hmac = ? WHERE vol_id = ? AND email_hmac IS NULL;",
                (addr_hash, vol_id))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Indexed the email of volunteer {vol_id}")
+    audit("volunteer.email_index", request, request.session.get("session_id"),
+          f"Indexed the email of volunteer {vol_id}")
     return {"ok": True}
 
 
@@ -366,7 +369,8 @@ def rate_volunteer(
                (note_id, vol_id, note, s_data["username"]))
     db.commit()
     broadcast("rating")
-    audit(request, request.session.get("session_id"), f"Rated volunteer {vol_id} at {slot_key}: {rating}")
+    audit("volunteer.rate", request, request.session.get("session_id"),
+          f"Rated volunteer {vol_id} at {slot_key}: {rating}")
 
     row = db.execute(
         "SELECT note, username, created_at FROM vol_notes WHERE note_id = ?;", (note_id,)
@@ -436,7 +440,8 @@ def add_vol_note(
     db.execute("INSERT INTO vol_notes (note_id, vol_id, note, username) VALUES (?, ?, ?, ?);",
                (note_id, vol_id, note, s_data["username"]))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Added note to volunteer {vol_id}: {note!r}")
+    audit("volunteer.note.add", request, request.session.get("session_id"),
+          f"Added note to volunteer {vol_id}: {note!r}")
 
     row = db.execute(
         "SELECT note_id, note, username, created_at FROM vol_notes WHERE note_id = ?;", (note_id,)
@@ -471,7 +476,8 @@ def delete_vol_note(
         raise HTTPException(status_code=404, detail="Note not found")
     db.execute("DELETE FROM vol_notes WHERE note_id = ?;", (note_id,))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Deleted note {note_id} for volunteer {row['vol_id']}")
+    audit("volunteer.note.delete", request, request.session.get("session_id"),
+          f"Deleted note {note_id} for volunteer {row['vol_id']}")
     return Response(status_code=204)
 
 
@@ -500,7 +506,8 @@ def drop_vol(
     db.execute("DELETE FROM volunteers WHERE vol_id = ?;", (vol_id,))
     db.commit()
     broadcast("assignment")
-    audit(request, request.session.get("session_id"), f"Dropped volunteer {vol_id}.")
+    audit("volunteer.drop", request, request.session.get("session_id"),
+          f"Dropped volunteer {vol_id}.")
     return Response(status_code=204)
 
 
@@ -572,7 +579,8 @@ def reset_vol_status(
     )
     db.commit()
     broadcast("checkin")
-    audit(request, request.session.get("session_id"), f"Reset status for vol_id={vol_id} at {pos_key}.")
+    audit("volunteer.status_reset", request, request.session.get("session_id"),
+          f"Reset status for vol_id={vol_id} at {pos_key}.")
     return Response(status_code=204)
 
 

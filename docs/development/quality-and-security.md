@@ -105,7 +105,7 @@ the top of `run_lint.sh`. A run fails if a score falls below its threshold.
 | App | Code: score | Code: ratchet | Tests: score | Tests: ratchet |
 |---|---|---|---|---|
 | portal | 8.98 | **8.9** | 9.81 | **9.8** |
-| backend | 8.82 | **8.8** | 9.74 | **9.7** |
+| backend | 8.95 | **8.9** | 9.74 | **9.7** |
 | mailrelay | 8.85 | **8.8** | 9.75 | **9.7** |
 | vol_mail | 8.62 | **8.6** | 9.40 | **9.3** |
 
@@ -117,6 +117,7 @@ History:
 |---|---|---|
 | 2026-11-18 | First baseline, when lint was introduced | 8.8 / 8.6 / 8.8 / 8.1 |
 | 2026-11-18 | Raised after the security-tier cleanup (static SQL, state holders, `raise … from`) | 8.9 / 8.8 / 8.8 / 8.6 |
+| 2026-11-23 | Backend raised with the structured audit log (`audit.py`) | 8.9 / 8.9 / 8.8 / 8.6 |
 
 Scores are per app because the apps are linted separately: backend/ and portal/ both have
 modules called `db` and `main`, so one pylint run would resolve imports against the wrong app.

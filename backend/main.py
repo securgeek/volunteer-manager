@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
+import audit
 import db as _db
 import portal_sync
 from routers import (auth, schedule, volunteers, users, email_keys, setup, events, radios,
@@ -107,10 +108,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog="Conference Scheduler")
     parser.add_argument("-d", help="Debug logging", action="store_true")
-    parser.add_argument("--audit", help="Audit log path", default="/app/logs/audit.log")
+    parser.add_argument("--audit", help="Audit log path (JSON lines)",
+                        default="/app/logs/audit.jsonl")
 
     args = parser.parse_args()
-    _db.audit_log = args.audit
+    audit.configure(args.audit)
 
     # Without this the root logger has no handler, so Python's last-resort handler emits
     # WARNING and above only — every log.info() in this application is silently discarded,

@@ -12,7 +12,6 @@ one file per release after 1.0 (`migrations/<release>.sql`) for an existing one,
 """
 import os
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
 
 import psycopg2
@@ -56,7 +55,6 @@ class _DbState:
 
 _state = _DbState()
 
-audit_log:      Optional[str] = None
 _session_cache: dict          = {}
 
 
@@ -378,34 +376,3 @@ def get_app_kv(db: PgClient, key: str, default_factory=None) -> Optional[str]:
         db.commit()
         return val
     return None
-
-
-def audit(request: Request, s_id: Optional[str], action: str, who: Optional[str] = None):
-    """Append one line to the audit log. ``who`` names a caller that has no session, such as
-    an export API key (api_auth.py), in place of "Unauthenticated".
-
-    Args:
-        request: The request, for the client IP (the first `X-Forwarded-For` hop when present).
-        s_id: The caller's session id. Its cached username and user id go on the line.
-        action: What happened, in words.
-        who: A label for a caller with no session. When set it wins over `s_id`.
-    """
-    if not audit_log:
-        return
-    forwarded = request.headers.get("X-Forwarded-For")
-    ip = forwarded.split(",")[0].strip() if forwarded else (
-        request.client.host if request.client else "unknown"
-    )
-    tstamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    if who:
-        with open(audit_log, "a", encoding="utf-8") as f:
-            f.write(f"{tstamp} - {who} from {ip}: {action}\n")
-    elif s_id:
-        sess = _session_cache.get(s_id, {})
-        user = sess.get("username", "unknown")
-        u_id = sess.get("user_id",  "unknown")
-        with open(audit_log, "a", encoding="utf-8") as f:
-            f.write(f"{tstamp} - {user}({u_id}) from {ip}: {action}\n")
-    else:
-        with open(audit_log, "a", encoding="utf-8") as f:
-            f.write(f"{tstamp} - Unauthenticated {ip}: {action}\n")

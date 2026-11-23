@@ -9,7 +9,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 
 import portal_sync
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 
 router = APIRouter()
 
@@ -68,7 +69,8 @@ def set_email_pubkey(
         (pubkey,)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), "Updated email public key")
+    audit("email_key.update", request, request.session.get("session_id"),
+          "Updated email public key")
     # The portal encrypts signups to this key and keeps signup shut without one.
     portal_sync.request_push()
     return {"ok": True}

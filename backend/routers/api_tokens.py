@@ -9,7 +9,8 @@ import uuid
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import api_auth
-from db import PgClient, RoleChecker, audit, get_db
+from audit import audit
+from db import PgClient, RoleChecker, get_db
 
 router = APIRouter()
 
@@ -100,7 +101,7 @@ def create_token(
          s_data["username"], expires_days),
     ).fetchone()
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("api_key.create", request, request.session.get("session_id"),
           f"Created API key {label!r} ({token_id}) with {' '.join(wanted)}")
     return {"token_id": token_id, "key": key, "expires_at": _iso(row["expires_at"])}
 
@@ -129,6 +130,6 @@ def revoke_token(
     db.execute("UPDATE api_tokens SET revoked_at = NOW() AT TIME ZONE 'UTC' "
                "WHERE token_id = ? AND revoked_at IS NULL;", (token_id,))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("api_key.revoke", request, request.session.get("session_id"),
           f"Revoked API key {row['label']!r} ({token_id})")
     return {"ok": True}

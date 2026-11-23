@@ -43,7 +43,8 @@ from webauthn.helpers.structs import (
     ResidentKeyRequirement, UserVerificationRequirement,
 )
 
-from db import get_db, get_session_data, get_app_kv, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, get_app_kv, RoleChecker, PgClient
 from passkey_providers import UNKNOWN_AAGUID, provider_name
 from routers.auth import start_session
 
@@ -219,7 +220,7 @@ def register_options(
     try:
         PasswordHasher().verify(row["password_hash"], password)
     except (VerificationError, InvalidHashError):
-        audit(request, request.session.get("session_id"),
+        audit("passkey.register.fail", request, request.session.get("session_id"),
               "Passkey registration refused: wrong password")
         raise HTTPException(status_code=403, detail="Password is incorrect") from None
 
@@ -289,7 +290,8 @@ def register_verify(
             supported_pub_key_algs=SUPPORTED_ALGS,
         )
     except WebAuthnException as exc:
-        audit(request, request.session.get("session_id"), f"Passkey registration rejected: {exc}")
+        audit("passkey.register.fail", request, request.session.get("session_id"),
+              f"Passkey registration rejected: {exc}")
         raise HTTPException(status_code=400, detail=f"Passkey not accepted: {exc}") from exc
 
     alg = int(decode_credential_public_key(v.credential_public_key).alg)
@@ -309,7 +311,7 @@ def register_verify(
     db.commit()
     if not inserted:
         raise HTTPException(status_code=409, detail="That passkey is already registered")
-    audit(request, request.session.get("session_id"),
+    audit("passkey.register.ok", request, request.session.get("session_id"),
           f"Registered passkey {label!r} ({provider or aaguid or 'unknown provider'}, "
           f"{ALG_NAMES.get(alg, alg)})")
     return _out(db.execute("SELECT * FROM user_passkeys WHERE credential_id = ?;",
@@ -366,11 +368,12 @@ def login_verify(
     unknown = HTTPException(status_code=401, detail="Passkey not recognized. Sign in with your "
                             "password, then add the passkey again.")
     if not row:
-        audit(request, None, "Passkey sign-in with an unknown passkey")
+        audit("auth.passkey.login.fail", request, None, "Passkey sign-in with an unknown passkey")
         raise unknown
     handle = cred.response.user_handle
     if handle is not None and bytes(handle) != bytes(row["webauthn_user_id"]):
-        audit(request, None, f"Passkey sign-in for {row['username']!r} with a mismatched user handle")
+        audit("auth.passkey.login.fail", request, None,
+              f"Passkey sign-in for {row['username']!r} with a mismatched user handle")
         raise unknown
 
     try:
@@ -380,7 +383,8 @@ def login_verify(
             credential_current_sign_count=row["sign_count"], require_user_verification=True,
         )
     except WebAuthnException as exc:
-        audit(request, None, f"Invalid passkey sign-in for user {row['username']!r}: {exc}")
+        audit("auth.passkey.login.fail", request, None,
+              f"Invalid passkey sign-in for user {row['username']!r}: {exc}")
         raise HTTPException(status_code=401, detail="Passkey sign-in failed") from exc
 
     db.execute(
@@ -389,7 +393,7 @@ def login_verify(
         (v.new_sign_count, v.credential_backed_up, cred.raw_id),
     )
     result = start_session(request, db, row)  # commits
-    audit(request, request.session.get("session_id"),
+    audit("auth.passkey.login.ok", request, request.session.get("session_id"),
           f"Signed in with a passkey ({ALG_NAMES.get(row['cose_alg'], row['cose_alg'])})")
     return result
 
@@ -440,7 +444,8 @@ def delete_passkey(
     db.commit()
     if not row:
         raise HTTPException(status_code=404, detail="Passkey not found")
-    audit(request, request.session.get("session_id"), f"Removed passkey {row['name']!r}")
+    audit("passkey.remove", request, request.session.get("session_id"),
+          f"Removed passkey {row['name']!r}")
     return Response(status_code=204)
 
 
@@ -487,7 +492,7 @@ def rename_passkey(
         (label, cid, user["user_id"]),
     ).fetchone()
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("passkey.rename", request, request.session.get("session_id"),
           f"Renamed passkey {old['name']!r} to {label!r}")
     return _out(row)
 
@@ -515,6 +520,6 @@ def clear_user_passkeys(
         raise HTTPException(status_code=404, detail="User not found")
     removed = db.execute("DELETE FROM user_passkeys WHERE user_id = ?;", (user_id,)).rowcount
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("passkey.clear_user", request, request.session.get("session_id"),
           f"Removed {removed} passkey(s) from user {target['username']!r}")
     return {"removed": removed}

@@ -738,7 +738,9 @@ def paced(monkeypatch):
 
 def test_send_makes_an_invite_pushes_it_then_mails_it(app, org, portal, paced, monkeypatch):
     lines = []
-    monkeypatch.setattr(paced, "audit", lambda req, sid, action, who=None: lines.append(action))
+    monkeypatch.setattr(paced, "audit",
+                        lambda event, req, sid, action, who=None, **data:
+                        lines.append(f"{action} {who} {data}"))
     r = org.post("/api/admin/portal/invites/send",
                  data={"name": "Grace Hopper", "email": "Grace@Example.org", "days": "7"})
     assert r.status_code == 200, r.text

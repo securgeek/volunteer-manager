@@ -5,7 +5,8 @@
 ```
 backend/
 ├── main.py          ← App factory, CLI entry point, /api/health
-├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker, audit
+├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker
+├── audit.py         ← The audit log: audit(), the EVENTS registry, client_ip
 ├── checkin_codes.py ← Shift check-in codes (HMAC) and the early/late rule; no DB
 ├── api_auth.py      ← Export API keys: TokenChecker(scope), IP allow-lists, failure limiter
 ├── names.py         ← split_name / export_name ("Handle [First L.]")
@@ -42,7 +43,21 @@ the browser while working fine when called directly. It's a plain string prefix:
 ## Session and auth
 
 - `_session_cache` in `db.py` is a module-level dict keyed by `session_id`. All routers import the same object by reference, so mutations are immediately visible everywhere.
-- `audit_log` is `None` by default. The `__main__` block sets it via `_db.audit_log = args.audit` before starting uvicorn; `audit()` reads it from its own module globals at call time.
+- **The audit log is `audit.py`.** `audit("event.code", request, s_id, message, who=None,
+  **data)` appends one JSON object per line to `logs/audit.jsonl` (`--audit`, set through
+  `audit.configure()` in `main.py`; unset, as in tests, it writes nothing). Fields: `ts` (UTC,
+  `Z`), `event`, `severity`, `actor`, `user_id`, `ip`, `method`, `path`, `message`, `data`.
+  - The **event code comes first and is a string literal from `audit.EVENTS`**, which gives
+    each code a severity. `test_audit.py` scans every call and fails on an unregistered or
+    non-literal code. A new kind of action needs a new registry entry.
+  - Put caller-controlled values (usernames, labels, ids) in `**data`, not only in the
+    message, so they can be filtered on. Never an email address, password or token.
+  - Lines are `json.dumps(..., ensure_ascii=True)`, so no input can forge a line: newlines,
+    U+2028/U+2029/U+0085 and bidi overrides all come out as escapes. That was the bug in
+    the old free-text `audit.log`, which wrote a failed login's username verbatim.
+  - A write failure is logged and swallowed; auditing never fails a request.
+  - `client_ip()` lives here (not in `api_auth`, which re-exports it) so `audit.py` imports
+    only `db` and nothing imports in a circle.
 - `RoleChecker("organizer")` as a Depends raises 401 if unauthenticated, 403 if wrong role.
 - `auth.start_session()` is the one place a session is created. The password login and the
   passkey login both call it, so the two produce identical sessions.

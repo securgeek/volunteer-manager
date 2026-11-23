@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse, Response
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 
 router = APIRouter()
 
@@ -95,7 +96,8 @@ def add_user(
         (user_id, username, ph.hash(password), role)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Added user {username!r} with role {role!r}")
+    audit("user.create", request, request.session.get("session_id"),
+          f"Added user {username!r} with role {role!r}")
     return JSONResponse(status_code=201, content=jsonable_encoder(db.execute(
         _GET_USER_SQL, (user_id,)
     ).fetchone()))
@@ -137,7 +139,8 @@ def set_user_role(
         (role, user_id)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Set role of {user_id!r} to {role!r}")
+    audit("user.role_change", request, request.session.get("session_id"),
+          f"Set role of {user_id!r} to {role!r}")
     return {"ok": True}
 
 
@@ -177,7 +180,8 @@ def set_user_password(
         (ph.hash(password), user_id)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Reset password for user {user_id!r}")
+    audit("password.reset.by_admin", request, request.session.get("session_id"),
+          f"Reset password for user {user_id!r}")
     return {"ok": True}
 
 
@@ -210,7 +214,7 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     db.execute("DELETE FROM users WHERE user_id = ?;", (user_id,))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Deleted user {user_id!r}")
+    audit("user.delete", request, request.session.get("session_id"), f"Deleted user {user_id!r}")
     return Response(status_code=204)
 
 
@@ -249,7 +253,7 @@ def change_own_password(
     try:
         ph.verify(row["password_hash"], current_password)
     except (VerificationError, InvalidHashError):
-        audit(request, request.session.get("session_id"),
+        audit("password.change.fail", request, request.session.get("session_id"),
               "Password change refused: wrong current password")
         raise HTTPException(status_code=403, detail="Current password is incorrect") from None
     if len(new_password) < 8:
@@ -259,7 +263,7 @@ def change_own_password(
         "updated_at = NOW(), failed_login_cnt = 0 WHERE user_id = ?;",
         (ph.hash(new_password), s_data["user_id"]))
     db.commit()
-    audit(request, request.session.get("session_id"), "Changed own password")
+    audit("password.change", request, request.session.get("session_id"), "Changed own password")
     return {"ok": True}
 
 
@@ -289,7 +293,7 @@ def set_user_email(
     db.commit()
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="User not found")
-    audit(request, request.session.get("session_id"),
+    audit("user.email_set", request, request.session.get("session_id"),
           f"{'Set' if address else 'Cleared'} email for user {user_id!r}")
     return {"ok": True, "email": address}
 
@@ -344,12 +348,12 @@ def change_own_email(
     try:
         PasswordHasher().verify(row["password_hash"], current_password)
     except (VerificationError, InvalidHashError, TypeError):
-        audit(request, request.session.get("session_id"),
+        audit("user.email_change.fail", request, request.session.get("session_id"),
               "Email change refused: wrong current password")
         raise HTTPException(status_code=403, detail="Current password is incorrect") from None
     db.execute("UPDATE users SET email = ?, updated_at = NOW() WHERE user_id = ?;",
                (address, s_data["user_id"]))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("user.email_change", request, request.session.get("session_id"),
           "Set own email" if address else "Cleared own email")
     return {"ok": True, "email": address}

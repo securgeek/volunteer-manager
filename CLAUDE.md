@@ -24,7 +24,7 @@ BSides/
 ├── plans/            ← Working plans (gitignored, never synced)
 ├── compose.yml       ← Builds both services, backend_data volume
 ├── compose.maintenance.yml, maintenance/, maintenance.sh ← "back soon" page while the stack is down
-├── logs/audit.log    ← Bind-mounted audit log
+├── logs/audit.jsonl  ← Bind-mounted audit log, one JSON object per line (backend/audit.py)
 └── Scheduler/        ← Original Flask app (reference only, not active)
 ```
 

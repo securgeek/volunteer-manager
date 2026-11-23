@@ -139,7 +139,7 @@ touched. Once the new version has settled, `podman volume rm` the old volume and
 | Scheduler database | `pgdata18` volume | `podman exec scheduler_postgres_1 pg_dump -U scheduler -Fc scheduler > backup.dump` |
 | Portal database | `portal_data` volume, `/data/portal.db` | `sqlite3 /data/portal.db ".backup '/data/backups/portal-$(date +%F-%H%M).db'"` inside the container. Never `cp`: with WAL, a copied file can be torn. |
 | Relay sign-in | `mailrelay_state` volume | Don't back it up. Run `relay.py login` again instead. |
-| Audit log | `logs/audit.log` (bind mount) | an ordinary file |
+| Audit log | `logs/audit.jsonl` (bind mount; `audit.log` before the JSON log) | an ordinary file |
 | `.env` and `private.pem` | your machine | keep them in a password manager. See [Secrets](secrets.md). |
 
 Both database dumps hold volunteer names and email ciphertext. Keep them owner-only

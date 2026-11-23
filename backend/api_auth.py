@@ -23,7 +23,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 
-from db import PgClient, audit, get_db
+from audit import audit, client_ip  # client_ip re-exported for callers
+from db import PgClient, get_db
 
 PREFIX = "bsc_"
 
@@ -61,20 +62,6 @@ def key_hash(key: str) -> str:
         The SHA-256 hex digest. A plain hash is enough because the key is random, not a password.
     """
     return hashlib.sha256(key.encode()).hexdigest()
-
-
-def client_ip(request: Request) -> str:
-    # nginx sends a single resolved X-Forwarded-For (frontend/CLAUDE.md → Reverse proxy).
-    """The caller's address, for the key's IP allow-list and the audit log.
-
-    Args:
-        request: The incoming request.
-
-    Returns:
-        The first `X-Forwarded-For` hop set by nginx, else the socket peer, else `""`.
-    """
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
 
 
 def rate_key(ip: str) -> str:
@@ -188,13 +175,14 @@ class TokenChecker:
         scopes = set((row or {}).get("scopes", "").split())
         if not row or self.scope not in scopes or not ip_allowed(ip, row["allowed_ips"]):
             _record_fail(ip)
-            audit(request, None, f"Export API refused: {request.method} {request.url.path}"
-                                 + (f" (key {row['token_id']})" if row else ""))
+            audit("api_key.refused", request, None,
+                  f"Export API refused: {request.method} {request.url.path}",
+                  token_id=row["token_id"] if row else None)
             raise _unauthorized()
 
         db.execute("UPDATE api_tokens SET last_used_at = NOW() AT TIME ZONE 'UTC', "
                    "last_used_ip = ? WHERE token_id = ?;", (ip, row["token_id"]))
         db.commit()
-        audit(request, None, f"{request.method} {request.url.path}",
-              who=f"API key {row['label']!r} ({row['token_id']})")
+        audit("api_key.use", request, None, f"{request.method} {request.url.path}",
+              who=f"API key {row['label']!r} ({row['token_id']})", token_id=row["token_id"])
         return {**row, "scopes": scopes}

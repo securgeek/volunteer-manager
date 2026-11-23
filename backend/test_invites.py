@@ -10,6 +10,7 @@ database's public schema is DROPPED.
     TEST_PG_HOST=127.0.0.1 TEST_PG_PORT=55432 TEST_PG_DB=scheduler_test \\
     TEST_PG_USER=scheduler TEST_PG_PASSWORD=test  pytest backend/test_invites.py -v
 """
+import json
 import os
 import sys
 from urllib.parse import parse_qs, urlparse
@@ -23,6 +24,7 @@ if not os.getenv("TEST_PG_HOST"):
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
+import audit  # noqa: E402
 import db as dbm  # noqa: E402
 import portal_sync  # noqa: E402
 
@@ -345,3 +347,44 @@ def test_organizers_set_anyones_email(app):
                                        data={"user_id": "u-alice"}).status_code == 403
     org.post("/api/users/set_email", data={"user_id": "u-bob", "email": ""})
 
+
+
+# ── the audit log, end to end through the real routes ─────────────────────────
+
+@pytest.fixture
+def audit_file(tmp_path):
+    """Turn the audit log on for one test; return a function that reads its records."""
+    path = tmp_path / "audit.jsonl"
+    audit.configure(str(path))
+    yield lambda: [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    audit.configure(None)
+
+
+def test_a_hostile_username_cannot_forge_an_audit_line(app, audit_file):
+    forged = "eve\n2026-01-01 00:00:00 - alice(u-alice) from 10.0.0.1: Deleted user 'bob'"
+    r = _client(app).post("/api/login", data={"username": forged, "password": "x"},
+                          headers={"X-Forwarded-For": "203.0.113.9"})
+    assert r.status_code == 401
+    (rec,) = audit_file()
+    assert rec["event"] == "auth.login.fail" and rec["ip"] == "203.0.113.9"
+    assert rec["data"] == {"username": forged.lower(), "reason": "unknown_user"}
+
+
+def test_sign_in_failure_success_and_sign_out_are_audited(app, audit_file):
+    c = _client(app)
+    assert c.post("/api/login", data={"username": "bob", "password": "wrong"}).status_code == 401
+    ok = c.post("/api/login", data={"username": "bob", "password": "bob-password"})
+    assert ok.status_code == 200
+    assert c.get("/api/logout").status_code == 200
+    recs = audit_file()
+    assert [r["event"] for r in recs] == ["auth.login.fail", "auth.login.ok", "auth.logout"]
+    assert recs[0]["data"]["reason"] == "bad_password" and recs[0]["actor"] is None
+    assert recs[1]["actor"] == "bob" and recs[1]["user_id"] == "u-bob"
+    assert recs[2]["actor"] == "bob"
+
+
+def test_a_password_reset_request_is_audited_without_the_address(app, audit_file, sent):
+    _request_reset(app, "alice")
+    (rec,) = audit_file()
+    assert rec["event"] == "password.reset.request" and rec["data"]["username"] == "alice"
+    assert "@" not in json.dumps(rec)

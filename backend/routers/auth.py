@@ -11,7 +11,8 @@ from fastapi.responses import Response
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
-from db import get_db, audit, _session_cache, get_session_data, PgClient
+from audit import audit
+from db import get_db, _session_cache, get_session_data, PgClient
 
 router = APIRouter()
 
@@ -47,7 +48,8 @@ def login(
         (username,)
     ).fetchone()
     if not row:
-        audit(request, None, f"Invalid login attempt for unknown user {username}")
+        audit("auth.login.fail", request, None, "Invalid login attempt for an unknown user",
+              username=username, reason="unknown_user")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     ph = PasswordHasher()
@@ -57,10 +59,13 @@ def login(
         new_failed = row["failed_login_cnt"] + 1
         db.execute("UPDATE users SET failed_login_cnt = ? WHERE username = ?;", (new_failed, username))
         db.commit()
-        audit(request, None, f"Invalid login attempt for user {username}")
+        audit("auth.login.fail", request, None, "Invalid login attempt",
+              username=username, reason="bad_password")
         raise HTTPException(status_code=401, detail="Unauthorized") from None
 
-    return start_session(request, db, row)
+    result = start_session(request, db, row)
+    audit("auth.login.ok", request, request.session.get("session_id"), "Signed in with a password")
+    return result
 
 
 def start_session(request: Request, db: PgClient, row: dict) -> dict:
@@ -110,6 +115,7 @@ def logout(request: Request, db: PgClient = Depends(get_db)):
     """
     s_id = request.session.pop("session_id", None)
     if s_id:
+        audit("auth.logout", request, s_id, "Signed out")
         _session_cache.pop(s_id, None)
         db.execute("DELETE FROM sessions WHERE session_id = ?;", (s_id,))
         db.commit()

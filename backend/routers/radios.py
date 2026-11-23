@@ -13,7 +13,8 @@ from typing import Optional
 import psycopg2
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 from routers.events import broadcast
 
 router = APIRouter()
@@ -254,7 +255,7 @@ def checkout_radio(
     db.commit()
 
     broadcast("radio")
-    audit(request, request.session.get("session_id"),
+    audit("radio.checkout", request, request.session.get("session_id"),
           f"Checked out radio {barcode} to {name}"
           + (f" (handed over from {transferred_from})" if transferred_from else ""))
     return {
@@ -307,7 +308,7 @@ def checkin_radio(
 
     db.commit()
     broadcast("radio")
-    audit(request, request.session.get("session_id"),
+    audit("radio.checkin", request, request.session.get("session_id"),
           f"Checked in radio {barcode} from {row['person_name']}")
     return {
         "ok":             True,
