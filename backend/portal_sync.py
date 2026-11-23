@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import audit
 import db as _db
 
 log = logging.getLogger("portal_sync")
@@ -666,6 +667,37 @@ async def push_signup_invites(conn) -> dict:
     return result
 
 
+async def pull_security_events(conn) -> int:
+    """Copy the portal's security events (its SecuritySignals findings) into the audit log.
+
+    Each becomes an audit event with source "portal", written to logs/audit.jsonl and
+    audit_events and run through the alert rules, exactly like one of ours. The cursor is
+    the portal's row id, kept as stream "security_events_pull".
+
+    Args:
+        conn: The database connection, for the cursor.
+
+    Returns:
+        How many events were taken.
+    """
+    cursor = cursor_of(_get_state(conn, "security_events_pull"))
+    taken = 0
+    while True:
+        data = await _request("GET", f"/api/sync/security_events?since={cursor}&limit=500")
+        events = data.get("events") or []
+        for e in events:
+            if audit.ingest(e, "portal"):
+                taken += 1
+        nxt = data.get("next", cursor)
+        if not isinstance(nxt, int) or nxt <= cursor:
+            break
+        cursor = nxt
+        _mark_ok(conn, "security_events_pull", cursor)
+        if len(events) < 500:
+            break
+    return taken
+
+
 async def pull_volunteers(conn) -> int:
     """Mirror changed volunteers, and their timeslot picks, into our own tables.
 
@@ -924,6 +956,11 @@ async def _sync_once(conn) -> dict:
         # A portal older than schema v7 has no content endpoint and no content_hash.
         if "content_hash" in hb and build_content(conn)["content_hash"] != hb["content_hash"]:
             status["content_push"] = await push_content(conn)
+
+        # A portal older than 1.1 has no security events and no security_events_rev.
+        state = _get_state(conn, "security_events_pull")
+        if hb.get("security_events_rev", 0) > cursor_of(state):
+            status["security_events_pulled"] = await pull_security_events(conn)
 
         # A portal older than schema v5 has no invites endpoint and no invites_hash.
         if "invites_hash" in hb and build_invites(conn)["content_hash"] != hb["invites_hash"]:

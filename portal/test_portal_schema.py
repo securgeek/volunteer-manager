@@ -46,7 +46,14 @@ def test_a_database_from_before_1_0_is_refused(dbm, tmp_path):
         dbm.migrate(conn)
 
 
+def _only_1_0(dbm, monkeypatch):
+    """Make the code believe 1.0 is the only release, so a test can add its own after it."""
+    monkeypatch.setattr(dbm, "SCHEMA_RELEASES", dbm.SCHEMA_RELEASES[:1])
+    monkeypatch.setattr(dbm, "PORTAL_SCHEMA_VERSION", dbm.BASELINE_VERSION)
+
+
 def test_a_release_file_runs_once_and_again_while_in_progress(dbm, tmp_path, monkeypatch):
+    _only_1_0(dbm, monkeypatch)
     conn = dbm.connect(str(tmp_path / "p.db"))
     dbm.migrate(conn)                                       # a 1.0 database
     path = tmp_path / "1.1.sql"
@@ -72,6 +79,7 @@ def test_a_release_file_runs_once_and_again_while_in_progress(dbm, tmp_path, mon
 
 
 def test_a_real_error_in_a_release_file_still_stops_the_start(dbm, tmp_path, monkeypatch):
+    _only_1_0(dbm, monkeypatch)
     conn = dbm.connect(str(tmp_path / "p.db"))
     dbm.migrate(conn)
     path = tmp_path / "1.1.sql"
@@ -82,3 +90,14 @@ def test_a_real_error_in_a_release_file_still_stops_the_start(dbm, tmp_path, mon
     with pytest.raises(Exception, match="no_such_table"):
         dbm.migrate(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 7    # not recorded
+
+
+def test_1_1_adds_the_security_events_table_to_a_1_0_database(dbm, tmp_path):
+    conn = dbm.connect(str(tmp_path / "p.db"))
+    dbm.migrate(conn)
+    conn.execute("DROP TABLE portal_security_events")
+    conn.execute("PRAGMA user_version = 7")
+    assert dbm.migrate(conn) == 8
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "portal_security_events" in tables
+    dbm.migrate(conn)                                       # in progress: re-runs cleanly

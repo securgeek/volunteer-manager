@@ -278,6 +278,19 @@ built. Each of these points is documented in the CLAUDE.md beside the code it de
 - **The landing page's Markdown** is rendered with raw HTML and images off and only web,
   email and same-site links, because it's inserted into a public page as HTML.
 
+**Detection and alerting**
+
+- **An audit log** (`backend/audit.py`): every write, sign-in and refusal is one JSON line in
+  `logs/audit.jsonl` and a row in `audit_events`. Caller-supplied text can't forge a line.
+- **Failed password sign-ins are rate limited** per username and address, counting only
+  failures, and an unknown username takes as long to refuse as a wrong password.
+- **Request signals** (`security_signals.py`, the same file in both apps) watch for attack
+  patterns, scanners, probing, malformed input, cross-site writes and forged session
+  cookies. They only watch: the one request refused is one carrying a NUL.
+- **Alerts** (`backend/alerts.py`) turn those, and account and key changes, into email to
+  the organizers with audit-log access, at most once an hour per cause. The portal sends
+  them through a fixed template with every detail defanged.
+
 **Runtime**
 
 - **Images:** Alpine base images, with no build tools or curl in them.
@@ -303,6 +316,12 @@ What nothing checks today, roughly in order of value:
   column. Other signed-in sessions, and the backend's session cache, carry on. Only a
   password reset by email deletes the account's sessions.
 - **The frontend.** The Vue/JavaScript code has no linter or security scanner.
+- **Requests nginx answers itself.** On the public hostname, nginx 404s everything outside
+  `/`, `/apply/` and `/api/portal/`, so a scanner's tries at `/wp-login.php` or `/.env` reach
+  no app and raise no signal. Only nginx's own access log has them.
+- **Detection never blocks.** A client that sets off alerts keeps being served until an
+  organizer does something about it. That's deliberate (an automatic block can lock an
+  organizer out on event day), but it means the alerts are the defence, not a wall.
 - **Types.** No type checker (mypy or pyright). Annotations aren't verified.
 - **Tooling code.** `docs/` and `lint/` aren't in `run_lint.sh`'s app list. The plugin is
   tested, but neither directory is linted.

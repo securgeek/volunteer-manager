@@ -51,6 +51,10 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+# The same, under a public name, for main.py's SecuritySignals middleware.
+client_ip = _client_ip
+
+
 def _ua(request: Request) -> str:
     return request.headers.get("user-agent", "")[:400]
 

@@ -29,6 +29,7 @@ request fails.
 import json
 import logging
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -136,6 +137,11 @@ EVENTS: dict[str, Event] = {
     "schedule.clear": Event("info", "Cleared a slot"),
     "schedule.note": Event("info", "Set or cleared a slot note"),
     "schedule.structure": Event("info", "Changed the schedule's days, times or positions"),
+    # Hostile-looking requests (security_signals.py), from the backend or pulled from the
+    # portal (source "portal").
+    "security.attack_signature": Event("high", "Attack patterns in a request"),
+    "security.suspicious_client": Event("high", "Unusual run of refused or malformed requests"),
+    "security.sync_auth_fail": Event("critical", "Bad signature on the portal's sync API"),
     # Alerts (alerts.py). Their own events are never fed back into the rules.
     "alert.fired": Event("medium", "A security alert rule fired"),
     "alert.mailed": Event("info", "A security alert was emailed"),
@@ -158,8 +164,8 @@ class _AuditConfig:
 _config = _AuditConfig()
 
 _INSERT_SQL = (
-    "INSERT INTO audit_events (ts, event, severity, actor, user_id, ip, method, path, "
-    "message, data) VALUES ((?::timestamptz AT TIME ZONE 'UTC'), ?, ?, ?, ?, ?, ?, ?, ?, "
+    "INSERT INTO audit_events (ts, source, event, severity, actor, user_id, ip, method, path, "
+    "message, data) VALUES ((?::timestamptz AT TIME ZONE 'UTC'), ?, ?, ?, ?, ?, ?, ?, ?, ?, "
     "?::jsonb);"
 )
 # A retention of 0 days keeps everything: the flag makes the DELETE match nothing.
@@ -301,6 +307,7 @@ def build_record(event: str, request: Request | None, s_id: str | None, message:
         "ts": _now(),
         "event": event,
         "severity": severity,
+        "source": "backend",
         "actor": _clip(actor),
         "user_id": user_id,
         "ip": (client_ip(request) or "unknown") if request else None,
@@ -346,7 +353,8 @@ def _store(record: dict) -> None:
         return
     try:
         conn.execute(_INSERT_SQL, (
-            rec["ts"], rec["event"], rec["severity"], rec["actor"], rec["user_id"], rec["ip"],
+            rec["ts"], rec.get("source", "backend"), rec["event"], rec["severity"], rec["actor"],
+            rec["user_id"], rec["ip"],
             rec["method"], rec["path"], rec["message"], json.dumps(rec["data"])))
         conn.commit()
     except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -375,12 +383,21 @@ def audit(event: str, request: Request | None, s_id: str | None, message: str,
     if event not in EVENTS:
         log.warning("audit: unregistered event code %r", event)
     try:
+        record = build_record(event, request, s_id, message, who, severity=severity, **data)
+    except (TypeError, ValueError) as exc:
+        log.error("audit: could not build %s event: %s", event, exc)
+        return
+    _emit(record)
+
+
+def _emit(record: dict) -> None:
+    """Write one record to the file, show it to the observers, and store it."""
+    event = record["event"]
+    try:
         # ensure_ascii: every non-ASCII character is written as \uXXXX. Raw, U+2028/U+2029
         # and U+0085 are line breaks to some readers (Python's splitlines among them), and
         # bidi overrides such as U+202E reorder text in a terminal. jq decodes them all.
-        line = json.dumps(build_record(event, request, s_id, message, who,
-                                       severity=severity, **data),
-                          ensure_ascii=True, default=str)
+        line = json.dumps(record, ensure_ascii=True, default=str)
     except (TypeError, ValueError) as exc:
         log.error("audit: could not encode %s event: %s", event, exc)
         return
@@ -402,3 +419,47 @@ def audit(event: str, request: Request | None, s_id: str | None, message: str,
                       getattr(observer, "__name__", observer), event, exc)
     if _config.to_db:
         _store(record)
+
+
+_TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
+
+
+def ingest(raw: dict, source: str) -> bool:
+    """Record an event that happened elsewhere (the portal's security events, pulled by
+    portal_sync), exactly as a local one: file, alert rules, table.
+
+    Everything in `raw` is treated as untrusted: the timestamp must be ISO 8601 UTC, the
+    severity one of SEVERITIES (else the registry's, else "info"), text is cut to MAX_TEXT,
+    and `data` must be an object. An unknown event code is recorded and flagged, as locally.
+
+    Args:
+        raw: `{ts, event, severity, ip, method, path, message, data}`.
+        source: Where it came from, e.g. `"portal"`.
+
+    Returns:
+        False when it was malformed and dropped, else True.
+    """
+    event, ts, data = raw.get("event"), raw.get("ts"), raw.get("data") or {}
+    if not isinstance(event, str) or not event or not isinstance(ts, str) \
+            or not _TS.match(ts) or not isinstance(data, dict):
+        log.warning("audit: dropped a malformed %s event", source)
+        return False
+    if not (_config.path or _config.to_db or _config.observers):
+        return True
+    severity = raw.get("severity")
+    if severity not in SEVERITIES:
+        severity = EVENTS[event].severity if event in EVENTS else "info"
+    record = {
+        "ts": ts, "event": _clip(event), "severity": severity, "source": _clip(source),
+        "actor": None, "user_id": None,
+        "ip": _clip(raw.get("ip")) if isinstance(raw.get("ip"), str) else None,
+        "method": _clip(raw.get("method")) if isinstance(raw.get("method"), str) else None,
+        "path": _clip(raw.get("path")) if isinstance(raw.get("path"), str) else None,
+        "message": _clip(str(raw.get("message") or "")),
+        "data": {str(k)[:100]: _clip(v) for k, v in data.items()},
+    }
+    if event not in EVENTS:
+        record["unregistered"] = True
+        log.warning("audit: unregistered event code %r from %s", event, source)
+    _emit(record)
+    return True

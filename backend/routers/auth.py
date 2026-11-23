@@ -157,8 +157,7 @@ def start_session(request: Request, db: PgClient, row: dict) -> dict:
     )
     db.execute(
         "INSERT INTO sessions (session_id, user_id, ip_addr, user_agent) VALUES (?, ?, ?, ?);",
-        (session_id, user_id,
-         request.client.host if request.client else "",
+        (session_id, user_id, client_ip(request),
          request.headers.get("user-agent", ""))
     )
     db.commit()

@@ -120,6 +120,12 @@ The list of event codes and their severities is `EVENTS` in `backend/audit.py`.
 **Security alerts** (`backend/alerts.py`) watch those events: bursts of failed sign-ins, a
 password spray, account and role changes, credential changes made by someone else, a new
 email key or export key, refused export calls, and sign-ins or key use from a new network.
+Requests to both the backend and the portal are also
+watched for attack patterns (SQL or script injection, path traversal, scanner tools, the
+paths scanners try) and for clients piling up refused or malformed requests. The portal's
+findings come to the backend's audit log over the sync API. Nothing is blocked; a request
+carrying a NUL character is the one refused, as no browser sends one.
+
 A fired alert is recorded as `alert.fired` and emailed, through the portal, to organizers
 with audit-log access and an address on their account. Each kind fires at most once an hour
 for the same cause, and at most 15 alerts are mailed an hour in all. The old

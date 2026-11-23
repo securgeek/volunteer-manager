@@ -198,6 +198,9 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
   (`send_admin_mail` kind `alert`) to organizers with `users.audit_access` and an email.
   See `backend/CLAUDE.md` → Security alerts; the plan is `plans/audit_alerting.md`.
 - Failed password sign-ins are rate limited (`backend/CLAUDE.md` → Session and auth).
+- `security_signals.py` (the **same file** in `backend/` and `portal/`; a test compares them)
+  watches every request for attack patterns, probing and malformed input, and refuses only a
+  NUL. Portal findings reach the backend's audit log over the sync API.
 
 ### Roles
 | Role | Can do |

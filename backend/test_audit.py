@@ -44,7 +44,7 @@ def test_a_line_is_one_json_object_with_the_expected_fields(log_file):
     audit.audit("auth.login.fail", _request(), None, "Invalid login attempt", username="bob")
     (line,) = _lines(log_file)
     rec = json.loads(line)
-    assert set(rec) == {"ts", "event", "severity", "actor", "user_id", "ip", "method", "path",
+    assert set(rec) == {"ts", "event", "severity", "source", "actor", "user_id", "ip", "method", "path",
                         "message", "data"}
     assert rec["event"] == "auth.login.fail" and rec["severity"] == "low"
     assert rec["ts"].endswith("Z") and "T" in rec["ts"]

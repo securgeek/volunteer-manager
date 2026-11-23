@@ -187,6 +187,8 @@ wrong or important, for example:
 - another person's password, passkeys or reset address changed
 - the volunteer email key replaced, or an export API key created
 - an organizer signing in from a network they haven't used in the last 30 days
+- requests to the organizer site or the volunteer pages that look like an attack (SQL or
+  script injection, scanning tools), or one address piling up errors
 
 Alerts go to organizers who can read the audit log **and** have an email address in
 **Profile**. At first that's only the first organizer account. If nobody qualifies, alerts

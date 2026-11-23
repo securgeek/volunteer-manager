@@ -224,7 +224,44 @@ async def heartbeat(body: bytes = Depends(verified_body),
         "pubkey_fp": security.pubkey_fingerprint(pubkey) if pubkey else None,
         "hmac_key_fp": security.hmac_key_fp(settings.email_hmac_key),
         "schema_version": conn.execute("PRAGMA user_version").fetchone()[0],
+        # Absent before 1.1, so a scheduler only pulls security events from a portal that
+        # has them.
+        "security_events_rev": conn.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM portal_security_events").fetchone()[0],
     }
+
+
+SECURITY_EVENT_DAYS = 7
+_PRUNE_SECURITY_EVENTS_SQL = "DELETE FROM portal_security_events WHERE ts < ?"
+_SECURITY_EVENTS_SQL = (
+    "SELECT id, ts, event, severity, ip, method, path, message, data "
+    "FROM portal_security_events WHERE id > ? ORDER BY id LIMIT ?")
+
+
+@router.get("/api/sync/security_events")
+async def pull_security_events(since: int = 0, limit: int = 500,
+                               body: bytes = Depends(verified_body),
+                               conn: sqlite3.Connection = Depends(db.get_db)):
+    """Security events (security_signals.py findings) after a cursor, oldest first.
+
+    The scheduler pulls these into its audit log and runs its alert rules over them. Rows
+    older than SECURITY_EVENT_DAYS are pruned here first: by then the scheduler has had them
+    many times over, and the portal keeps nothing it doesn't need.
+
+    Args:
+        since: Return events with an id above this.
+        limit: At most this many (capped at 500).
+        body: The raw body, after the signature check (`verified_body`).
+        conn: The database connection.
+
+    Returns:
+        `{"events": [...], "next": <the last id returned, or since>}`.
+    """
+    conn.execute(_PRUNE_SECURITY_EVENTS_SQL,
+                 (clock.iso(clock.now() - timedelta(days=SECURITY_EVENT_DAYS)),))
+    rows = conn.execute(_SECURITY_EVENTS_SQL, (since, max(1, min(limit, 500)))).fetchall()
+    events = [{**dict(r), "data": json.loads(r["data"] or "{}")} for r in rows]
+    return {"events": events, "next": events[-1]["id"] if events else since}
 
 
 @router.get("/api/sync/volunteers")

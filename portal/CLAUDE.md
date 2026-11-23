@@ -136,6 +136,20 @@ A compromised scheduler could therefore send its own site's invite, reset or sig
 links to addresses it chose, or an alert of short, single-line, defanged text pointing at
 its own `/admin/audit`, but nothing else. `test_admin_mail.py` pins each of these.
 
+### Request signals
+
+`security_signals.py` is **the backend's file, copied unchanged** (`backend/test_security_signals.py`
+fails if they differ; `backend/CLAUDE.md` → Request signals has the detail). `main.py` adds it
+with this app's `auth.client_ip` (rightmost, invariant 3 below), bodies under `/api/sync/` left
+unread, and a 401 under `/api/sync/` reported as `sync_auth_fail` (critical: nothing but the
+scheduler should call it, so a bad signature means something inside the compose network is
+trying). It only watches, except that a request carrying a NUL is a 400.
+
+Findings go to `portal_security_events` (`report_signal`), never with an address in them. The
+heartbeat reports `security_events_rev` (the newest id) and the scheduler pulls new rows from
+`GET /api/sync/security_events?since=&limit=` into its audit log and alert rules. Rows older
+than 7 days are pruned on each pull.
+
 ## Auth invariants
 
 All three are easy to lose in a refactor:

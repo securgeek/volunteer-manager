@@ -9,6 +9,7 @@ backend/
 ├── audit.py         ← The audit log: audit(), the EVENTS registry, client_ip
 ├── ratelimit.py     ← SlidingWindow: in-memory per-key limits (sign-in, password reset)
 ├── alerts.py        ← Security alert rules over audit events; mailed through the portal
+├── security_signals.py ← Request-watching middleware (identical copy in portal/)
 ├── checkin_codes.py ← Shift check-in codes (HMAC) and the early/late rule; no DB
 ├── api_auth.py      ← Export API keys: TokenChecker(scope), IP allow-lists, failure limiter
 ├── names.py         ← split_name / export_name ("Handle [First L.]")
@@ -65,8 +66,9 @@ the browser while working fine when called directly. It's a plain string prefix:
     which `main.lifespan` runs at startup and every 24 h. `source` is `backend`, or
     `portal` for portal events pulled in later. NUL can't go into Postgres TEXT/JSONB, so
     the row has U+FFFD where the file has `\u0000`.
-  - **A NUL in any query parameter makes psycopg2 raise** (a 500). `/api/login` treats a
-    username with one as unknown; other routes still need the planned request middleware.
+  - **A NUL in any query parameter makes psycopg2 raise** (a 500). `security_signals`
+    answers any request carrying one with a 400 before a route sees it; `/api/login` also
+    treats such a username as unknown, for callers that bypass the middleware (tests).
   - A write failure is logged and swallowed; auditing never fails a request.
   - `client_ip()` lives here (not in `api_auth`, which re-exports it) so `audit.py` imports
     only `db` and nothing imports in a circle.
@@ -81,6 +83,8 @@ the browser while working fine when called directly. It's a plain string prefix:
   client is audited once per key per window (`auth.login.throttled`), not per request.
   `reset_login_limits()` clears it all; `conftest.py` does so before every test, since all
   test clients share one address.
+- **`sessions.ip_addr` is the client's address** (`audit.client_ip`). Before 1.1 it stored
+  `request.client.host`, which behind nginx is always nginx's container address.
 - **An unknown username is verified against a dummy Argon2 hash**, so it takes as long as a
   wrong password and response time doesn't reveal which usernames exist.
 - `auth.start_session()` is the one place a session is created. The password login and the
@@ -129,6 +133,37 @@ directly or add the observer themselves). `RULES` is the whole list:
   `time.monotonic` itself: asyncio's loop runs on it, and a frozen one hangs `asyncio.sleep`.
 - State is in memory (one worker); `alerts.reset()` clears it, and `conftest.py` does before
   every test.
+
+## Request signals (`security_signals.py`)
+
+An ASGI middleware, `main.py` adds it (inside `SessionMiddleware`, so a finding names the
+signed-in user). **The same file is in `portal/`**; `test_security_signals.py` fails if the
+two differ, so edit one and copy it. Each app passes what differs: `client_ip` (here
+`audit.client_ip`, leftmost; the portal's `auth.client_ip`, rightmost), `report`, the
+skipped paths, the app's own origins, and here `cookie_check` (`_bad_session_cookie`: a
+session cookie whose itsdangerous signature fails, as opposed to one merely expired).
+
+- **Only watches.** The one request it answers is one with a NUL (path, query, form): 400
+  `Malformed request`. Everything else reaches the route untouched; a body it reads (form
+  types, ≤ 1 MB) is replayed to the route.
+- **Signatures** (`SIGNATURES`, `SCANNER_AGENT`, `PROBE_PATH`) are narrow on purpose:
+  `test_real_text_is_never_a_signal` holds a list of real input that must never match.
+  Add to it when a pattern changes. File parts and `*password*`/`*secret*` fields are never
+  inspected.
+- **Findings** (`report(kind, request, data)`, in a thread): `attack_signature` at once for
+  any signature; `suspicious_client` when a client's weights (`WEIGHTS`: 404 under `/api/`,
+  403, 422, cross-site writes, bad cookies…) reach 15 in 10 min; `sync_auth_fail` for a 401
+  under the critical prefix (portal only). Each at most once an hour per client, with a
+  `held_back` count; single errors are never rows. Here they become `security.*` audit
+  events (`_report_signal`), which `alerts.RULES` turn into alerts keyed by address.
+- **The portal's findings** are rows in its `portal_security_events`. Each sync tick, when the
+  heartbeat's `security_events_rev` passes our cursor (stream `security_events_pull`),
+  `portal_sync.pull_security_events` takes them through `audit.ingest(…, "portal")`: the
+  file, the alert rules and `audit_events` with `source = 'portal'`, everything treated as
+  untrusted (timestamp shape, severity, sizes). A portal before 1.1 reports no rev and is
+  never asked.
+- Tests: `test_security_signals.py` (the middleware, no database), the pull in
+  `test_signup_sync.py`, and `portal/test_security_events.py`.
 
 ## Passkeys (`routers/passkeys.py`)
 

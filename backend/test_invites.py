@@ -481,7 +481,7 @@ def test_every_audit_line_is_also_a_row_with_the_same_content(app, audit_file):
     assert len(rows) == len(lines) == 2
     for line, row in zip(lines, rows):
         assert row["source"] == "backend"
-        for k in ("event", "severity", "actor", "user_id", "ip", "method", "path", "message",
+        for k in ("event", "severity", "source", "actor", "user_id", "ip", "method", "path", "message",
                   "data", "ts"):
             assert row[k] == line[k], k
     assert rows[0]["ip"] == "198.51.100.7" and rows[0]["data"]["reason"] == "bad_password"
