@@ -40,4 +40,7 @@ def _fresh_login_limits():
     auth = sys.modules.get("routers.auth")
     if auth is not None:
         auth.reset_login_limits()
+    alerts = sys.modules.get("alerts")
+    if alerts is not None:
+        alerts.reset()
     yield

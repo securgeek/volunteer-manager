@@ -8,6 +8,7 @@ backend/
 ├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker
 ├── audit.py         ← The audit log: audit(), the EVENTS registry, client_ip
 ├── ratelimit.py     ← SlidingWindow: in-memory per-key limits (sign-in, password reset)
+├── alerts.py        ← Security alert rules over audit events; mailed through the portal
 ├── checkin_codes.py ← Shift check-in codes (HMAC) and the early/late rule; no DB
 ├── api_auth.py      ← Export API keys: TokenChecker(scope), IP allow-lists, failure limiter
 ├── names.py         ← split_name / export_name ("Handle [First L.]")
@@ -84,6 +85,50 @@ the browser while working fine when called directly. It's a plain string prefix:
   wrong password and response time doesn't reveal which usernames exist.
 - `auth.start_session()` is the one place a session is created. The password login and the
   passkey login both call it, so the two produce identical sessions.
+
+## Security alerts (`alerts.py`)
+
+`alerts.observe` sees every audit record (registered with `audit.add_observer` by
+`alerts.start()` in `main.lifespan`, only when the audit table is on; tests call `observe`
+directly or add the observer themselves). `RULES` is the whole list:
+
+| Rule | Fires on | Severity |
+|---|---|---|
+| `login.bruteforce.ip` | 10 `auth.login.fail` from one address (`rate_key`) in 15 min | high |
+| `login.bruteforce.user` | 5 wrong passwords for one username, any address, in 15 min | high |
+| `login.spray` | failures for 5 distinct usernames from one address in 15 min | high |
+| `login.new_network` | a sign-in from a /24 (/64) the user hasn't used in 30 days, if they have history | low |
+| `setup.create_admin` / `setup.after_complete` | the first admin made; setup called again later | high / medium |
+| `account.privilege` | `user.create`, `user.role_change`, `invite.accept` | medium |
+| `account.credentials` | another user's password, passkeys or reset address changed; a user deleted | medium |
+| `account.reset` | `password.reset.complete` | medium |
+| `email_key.change` | `email_key.update` (where volunteer addresses are encrypted to) | high |
+| `api_key.create` / `api_key.refused` / `api_key.new_network` | a key made; 5 refusals from one address in 10 min; a key used from a new network | medium / medium / low |
+| `volunteer.bulk_purge` | 5 purges by one organizer in 10 min | medium |
+| `checkin.key_rotate` | the check-in key rotated | low |
+| `severity.high` | any high/critical event no rule above watches (future-proofing) | high |
+
+- **Cooldown**: a rule and key fire at most once per `COOLDOWN_SEC` (1 h); matching events in
+  between are counted, and the next alert carries `held_back`. Plus `MAX_MAILED_PER_HOUR`
+  (15) mailed alerts in all; over it they're recorded with `mailed: false`.
+- **A fired alert** is an `alert.fired` audit event at the alert's severity (`audit(...,
+  severity=…)`, request `None`), then queued. The worker (`deliver`) mails each recipient
+  through `portal_sync.send_admin_mail("alert", …)`, retrying once after 60 s, and records
+  `alert.mailed` (a count) or `alert.mail_fail` (by username, never address). Rules ignore
+  `alert.*`, so nothing loops.
+- **Recipients** are `users` with `audit_access`, role organizer and an `email`
+  (`recipients()`). `audit_access` (1.1) is seeded on the earliest organizer and on the
+  first admin at setup; granting it is step 7 of `plans/audit_alerting.md`.
+- **Facts** in the mail: event, time, client address, signed-in user, request, the count, and
+  the event's `data` minus any key containing "email". The portal defangs them again
+  (`portal/CLAUDE.md` → Admin mail).
+- The two "new network" rules read `audit_events` (so they need the table, and stay quiet
+  with no history, so turning alerts on isn't a burst of mail) and remember known
+  (who, network) pairs in memory.
+- `_monotonic` and `ratelimit._monotonic` are the clocks tests move. Never monkeypatch
+  `time.monotonic` itself: asyncio's loop runs on it, and a frozen one hangs `asyncio.sleep`.
+- State is in memory (one worker); `alerts.reset()` clears it, and `conftest.py` does before
+  every test.
 
 ## Passkeys (`routers/passkeys.py`)
 

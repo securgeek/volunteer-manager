@@ -171,7 +171,8 @@ def setup_create_admin(
     user_id = str(uuid.uuid4())
     ph      = PasswordHasher()
     db.execute(
-        "INSERT INTO users (user_id, username, password_hash, role) VALUES (?, ?, ?, 'organizer');",
+        "INSERT INTO users (user_id, username, password_hash, role, audit_access) "
+        "VALUES (?, ?, ?, 'organizer', TRUE);",
         (user_id, username.lower().strip(), ph.hash(password))
     )
     db.commit()

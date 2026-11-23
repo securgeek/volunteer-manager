@@ -174,3 +174,90 @@ def test_a_signup_invite_keeps_neither_address_nor_link(app_env, client):
     assert "admin_mail.sent signup_invite" in audit
     for blob in (audit, ops):
         assert "@" not in blob and "TOKpriv" not in blob
+
+
+# ── security alerts (backend/alerts.py) ───────────────────────────────────────
+
+def _alert(client, op, **over):
+    payload = {"op_id": op, "kind": "alert", "to": "organizer@example.com",
+               "link": f"{SITE}/admin/audit", "app_title": "BSidesCharm",
+               "rule": "login.bruteforce.ip", "title": "Many failed sign-ins from one address",
+               "severity": "high", "held_back": 0,
+               "facts": [["Event", "auth.login.fail"], ["Client address", "203.0.113.9"],
+                         ["Seen", "10 events in 15 minutes"]]}
+    payload.update(over)
+    return _signed(client, "POST", "/api/sync/send_admin_mail", payload)
+
+
+def _body(msg):
+    return msg.get_body(preferencelist=("plain",)).get_content()
+
+
+def test_an_alert_is_mailed_from_its_template(app_env, client):
+    r = _alert(client, "a1", held_back=7)
+    assert r.status_code == 200 and r.json() == {"ok": True, "kind": "alert"}
+    (msg,) = _mail(app_env)
+    assert msg["Subject"] == "[BSidesCharm] Security alert: Many failed sign-ins from one address"
+    body = _body(msg)
+    assert "BSidesCharm: security alert (high)" in body
+    assert "  Client address: 203.0.113.9" in body and "  Event:          auth.login.fail" in body
+    assert "7 more matching events" in body and f"{SITE}/admin/audit" in body
+
+
+@pytest.mark.parametrize("hostile, shown", [
+    ("http://evil.example/login", "http[:]//evil.example/login"),
+    ("see www.evil.example now", "see www[.]evil.example now"),
+    ("javascript:alert(1)", "javascript[:]alert(1)"),
+    ("bob\nClick here: hxxp\r\nBcc: x@y.z", "bob Click here: hxxp Bcc: x@y.z"),
+    ("a" + chr(0x202E) + "evil" + chr(0x2028) + "b\x00c", "a evil b c"),
+    ("{{ link }}", "{ { link } }"),
+])
+def test_alert_text_is_flattened_and_defanged(app_env, client, hostile, shown):
+    r = _alert(client, f"h{abs(hash(hostile))}", facts=[["Username", hostile]], title=hostile)
+    assert r.status_code == 200, r.text
+    (msg,) = _mail(app_env)
+    assert f"  Username: {shown}" in _body(msg)
+    assert msg["Subject"].endswith(shown)
+    assert "\n" not in msg["Subject"]
+
+
+@pytest.mark.parametrize("over, why", [
+    ({"rule": "Bad Rule!"}, "Bad alert rule"),
+    ({"rule": None}, "Bad alert rule"),
+    ({"severity": "urgent"}, "Bad alert severity"),
+    ({"title": ""}, "Bad alert title"),
+    ({"title": "\n\x00 "}, "Bad alert title"),
+    ({"title": 5}, "Bad alert title"),
+    ({"held_back": -1}, "Bad alert count"),
+    ({"held_back": True}, "Bad alert count"),
+    ({"facts": "x"}, "Bad alert facts"),
+    ({"facts": [["only one"]]}, "Bad alert facts"),
+    ({"facts": [["k", "v"]] * 11}, "Bad alert facts"),
+    ({"link": f"{SITE}/admin/audit?next=https://evil.example"}, "isn't this site's"),
+    ({"link": f"{SITE}/admin/auditx"}, "isn't this site's"),
+    ({"link": f"{SITE}/admin/invite?t=X"}, "isn't this site's"),
+])
+def test_a_malformed_alert_is_refused_and_nothing_is_sent(app_env, client, over, why):
+    r = _alert(client, "bad", **over)
+    assert r.status_code == 400 and why in r.json()["detail"]
+    assert _mail(app_env) == []
+
+
+def test_alerts_have_their_own_hourly_allowance(app_env, client, monkeypatch):
+    from routers import sync
+    monkeypatch.setattr(sync, "ALERT_MAIL_PER_HOUR", 3)
+    for i in range(3):
+        assert _alert(client, f"q{i}").status_code == 200
+    assert _alert(client, "q3").status_code == 429
+    # Invites and resets aren't touched by the alerts' allowance.
+    assert _send(client, op="still-ok").status_code == 200
+
+
+def test_an_alert_keeps_neither_address_nor_details(app_env, client):
+    _alert(client, "k1", facts=[["Username", "secret-name"]])
+    conn = _conn(app_env)
+    audit = " ".join(f"{r['action']} {r['detail']}" for r in
+                     conn.execute("SELECT action, detail FROM portal_audit").fetchall())
+    conn.close()
+    assert "admin_mail.sent alert" in audit
+    assert "@" not in audit and "secret-name" not in audit

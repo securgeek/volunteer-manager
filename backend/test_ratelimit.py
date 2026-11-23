@@ -16,7 +16,7 @@ def clock(monkeypatch):
 
         now = 1000.0
     c = Clock()
-    monkeypatch.setattr(ratelimit.time, "monotonic", lambda: c.now)
+    monkeypatch.setattr(ratelimit, "_monotonic", lambda: c.now)
     return c
 
 

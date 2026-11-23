@@ -521,5 +521,6 @@ def clear_user_passkeys(
     removed = db.execute("DELETE FROM user_passkeys WHERE user_id = ?;", (user_id,)).rowcount
     db.commit()
     audit("passkey.clear_user", request, request.session.get("session_id"),
-          f"Removed {removed} passkey(s) from user {target['username']!r}")
+          f"Removed {removed} passkey(s) from user {target['username']!r}",
+          target=target["username"], removed=removed)
     return {"removed": removed}

@@ -97,7 +97,7 @@ def add_user(
     )
     db.commit()
     audit("user.create", request, request.session.get("session_id"),
-          f"Added user {username!r} with role {role!r}")
+          f"Added user {username!r} with role {role!r}", target=username, role=role)
     return JSONResponse(status_code=201, content=jsonable_encoder(db.execute(
         _GET_USER_SQL, (user_id,)
     ).fetchone()))
@@ -140,7 +140,7 @@ def set_user_role(
     )
     db.commit()
     audit("user.role_change", request, request.session.get("session_id"),
-          f"Set role of {user_id!r} to {role!r}")
+          f"Set role of {user_id!r} to {role!r}", target_user_id=user_id, role=role)
     return {"ok": True}
 
 
@@ -181,7 +181,7 @@ def set_user_password(
     )
     db.commit()
     audit("password.reset.by_admin", request, request.session.get("session_id"),
-          f"Reset password for user {user_id!r}")
+          f"Reset password for user {user_id!r}", target_user_id=user_id)
     return {"ok": True}
 
 
@@ -214,7 +214,8 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     db.execute("DELETE FROM users WHERE user_id = ?;", (user_id,))
     db.commit()
-    audit("user.delete", request, request.session.get("session_id"), f"Deleted user {user_id!r}")
+    audit("user.delete", request, request.session.get("session_id"), f"Deleted user {user_id!r}",
+          target_user_id=user_id)
     return Response(status_code=204)
 
 
@@ -294,7 +295,8 @@ def set_user_email(
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="User not found")
     audit("user.email_set", request, request.session.get("session_id"),
-          f"{'Set' if address else 'Cleared'} email for user {user_id!r}")
+          f"{'Set' if address else 'Cleared'} email for user {user_id!r}",
+          target_user_id=user_id)
     return {"ok": True, "email": address}
 
 

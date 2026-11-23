@@ -176,6 +176,30 @@ Scanning a radio someone else holds hands it over. To return radios, press **Che
 scan each one.
 The tab lists what's out, what's available, and the full log.
 
+## Security alerts
+
+The site watches its own audit log and emails a **security alert** when something looks
+wrong or important, for example:
+
+- many failed sign-ins from one address, or for one account
+- someone trying lots of different usernames
+- an account created, or its role changed
+- another person's password, passkeys or reset address changed
+- the volunteer email key replaced, or an export API key created
+- an organizer signing in from a network they haven't used in the last 30 days
+
+Alerts go to organizers who can read the audit log **and** have an email address in
+**Profile**. At first that's only the first organizer account. If nobody qualifies, alerts
+are still recorded but not sent, so add your address in Profile. Each alert links to the
+audit log.
+
+One kind of alert comes at most once an hour for the same cause. The next one says how many
+more events came in meanwhile, so a sustained attack is a trickle of mail, not a flood.
+
+Treat what's in an alert as untrusted. Details such as a username can be whatever the
+attacker typed, and anything that looked like a link has been broken on purpose. Open the
+site yourself rather than following anything in the details.
+
 ## Your own account
 
 **Profile**, under your name in the top right, changes your own password and email. Both

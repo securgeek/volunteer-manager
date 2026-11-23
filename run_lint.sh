@@ -41,11 +41,12 @@ done
 # pylint's --source-roots and PYTHONPATH. Backend tests also reach into portal/ (security.py),
 # so portal comes after backend there: `db` and `main` still resolve to backend's.
 # Ratchets are the score rounded down (raised 2026-11-18, after the security-tier cleanup;
-# backend code to 8.9 on 2026-11-23, with the structured audit log).
+# backend code to 8.9 on 2026-11-23, with the structured audit log; backend and portal code
+# to 9.0 the same day, with alerts).
 # Raise them as the code is cleaned up; never lower them to get a change through.
 APPS=(
-    "portal|portal|portal|portal|8.9|9.8"
-    "backend|backend|backend|backend,portal|8.9|9.7"
+    "portal|portal|portal|portal|9.0|9.8"
+    "backend|backend|backend|backend,portal|9.0|9.7"
     "mailrelay|mailrelay|mailrelay|mailrelay|8.8|9.7"
     "vol_mail|tools/vol_mail|tools/vol_mail,backend|tools/vol_mail,backend|8.6|9.3"
 )

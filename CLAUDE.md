@@ -190,6 +190,15 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
 - `get_session_data(request, db)` — Depends, returns `{"user_id", "username", "role"}` or `None`.
 - `RoleChecker(*roles)` — callable class used as a Depends; raises 401/403. Example: `Depends(RoleChecker("organizer"))`.
 
+### Audit log and alerts
+- Every write, sign-in and refusal is an `audit("event.code", …)` call (`backend/audit.py`):
+  a JSON line in `logs/audit.jsonl` and a row in `audit_events`. Codes come from
+  `audit.EVENTS`, which a test enforces.
+- `backend/alerts.py` runs rules over those events and emails alerts through the portal
+  (`send_admin_mail` kind `alert`) to organizers with `users.audit_access` and an email.
+  See `backend/CLAUDE.md` → Security alerts; the plan is `plans/audit_alerting.md`.
+- Failed password sign-ins are rate limited (`backend/CLAUDE.md` → Session and auth).
+
 ### Roles
 | Role | Can do |
 |------|--------|

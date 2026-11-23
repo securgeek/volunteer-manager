@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
+import alerts
 import audit
 import db as _db
 import portal_sync
@@ -98,10 +99,14 @@ async def lifespan(app: FastAPI):
     # portal behaves exactly as it did before.
     portal_sync.start(loop)
     # Only when the audit table is in use (main below); tests start the app without it.
-    pruner = loop.create_task(_prune_audit_daily()) if audit.configured_to_db() else None
+    pruner = None
+    if audit.configured_to_db():
+        pruner = loop.create_task(_prune_audit_daily())
+        alerts.start(loop)
     yield
     if pruner:
         pruner.cancel()
+        alerts.stop()
 
 
 app = FastAPI(title="Conference Scheduler", lifespan=lifespan)

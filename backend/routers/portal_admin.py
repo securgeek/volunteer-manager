@@ -540,7 +540,8 @@ async def purge_volunteers(
                             "nothing was deleted. Try again shortly.") from exc
     sid = request.session.get("session_id")
     for v in deleted:
-        audit("volunteer.purge", request, sid, f"Purged volunteer {found[v]['name']!r} ({v})")
+        audit("volunteer.purge", request, sid, f"Purged volunteer {found[v]['name']!r} ({v})",
+              vol_id=v)
     from routers.events import broadcast
     broadcast("volunteers")
     broadcast("schedule")

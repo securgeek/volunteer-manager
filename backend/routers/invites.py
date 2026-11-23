@@ -268,5 +268,6 @@ def accept_invite(
     result = start_session(request, db, {"user_id": user_id, "username": username,
                                          "role": invite["role"]})
     audit("invite.accept", request, request.session.get("session_id"),
-          f"Accepted invite {invite['invite_id']} as {invite['role']}")
+          f"Accepted invite {invite['invite_id']} as {invite['role']}",
+          invite_id=invite["invite_id"], role=invite["role"])
     return result

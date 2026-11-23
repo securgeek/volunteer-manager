@@ -157,6 +157,9 @@ class Mailer:
                    ("inviter", "role", "app_title", "hours")),
         "reset":  ("admin_reset.txt", "Reset your {app_title} password",
                    ("username", "app_title", "minutes")),
+        # Values already checked and defanged by routers/sync.py _alert_values.
+        "alert":  ("admin_alert.txt", "[{app_title}] Security alert: {title}",
+                   ("app_title", "severity", "title", "facts", "held_back")),
         # The early-access signup invite isn't here: its template is the organizers'
         # (content.py, Volunteer Portal → Invite email), rendered in routers/sync.py.
     }

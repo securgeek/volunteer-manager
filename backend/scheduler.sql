@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- WebAuthn user handle; random, set on first passkey registration (v9).
     webauthn_user_id  BYTEA,
     -- For password reset only; sign-in is by username (v15).
-    email             TEXT
+    email             TEXT,
+    -- May read the audit log, and receives security alerts (1.1). Granted only by another
+    -- holder; the first admin gets it at setup (routers/setup.py).
+    audit_access      BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_webauthn_user_id
     ON users (webauthn_user_id) WHERE webauthn_user_id IS NOT NULL;

@@ -12,6 +12,9 @@ import threading
 import time
 from collections import defaultdict, deque
 
+# The clock. A name of its own so tests can move it without touching time.monotonic itself.
+_monotonic = time.monotonic
+
 
 class SlidingWindow:
     """At most `limit` events per key in any `window_sec` seconds.
@@ -45,7 +48,7 @@ class SlidingWindow:
         Returns:
             True if at least one key has `limit` events in the current window.
         """
-        now = time.monotonic()
+        now = _monotonic()
         with self._lock:
             return any(len(self._trim(k, now)) >= self.limit for k in keys)
 
@@ -55,7 +58,7 @@ class SlidingWindow:
         Args:
             *keys: The keys to count against.
         """
-        now = time.monotonic()
+        now = _monotonic()
         with self._lock:
             for k in keys:
                 self._hits[k].append(now)
@@ -69,7 +72,7 @@ class SlidingWindow:
         Returns:
             False if any key is at its limit (nothing recorded), else True.
         """
-        now = time.monotonic()
+        now = _monotonic()
         with self._lock:
             if any(len(self._trim(k, now)) >= self.limit for k in keys):
                 return False
@@ -86,7 +89,7 @@ class SlidingWindow:
         Returns:
             Whole seconds, rounded up.
         """
-        now = time.monotonic()
+        now = _monotonic()
         wait = 0.0
         with self._lock:
             for k in keys:

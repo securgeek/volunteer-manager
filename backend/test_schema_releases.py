@@ -166,3 +166,32 @@ def test_1_1_adds_audit_events_to_a_1_0_database(pg):
     assert "audit_events" in _tables(pg) and _version(pg) == 20
     dbm.migrate(pg)                                         # in progress: re-runs cleanly
     assert _version(pg) == 20
+
+
+def test_1_1_grants_audit_access_to_the_earliest_organizer_once(pg):
+    dbm.migrate(pg)
+    with pg.cursor() as cur:
+        for uid, role, when in (("u-view", "view", "2025-01-01"), ("u-org2", "organizer",
+                                "2025-03-01"), ("u-org1", "organizer", "2025-02-01")):
+            cur.execute("INSERT INTO users (user_id, username, password_hash, role, created_at) "
+                        "VALUES (%s, %s, 'x', %s, %s)", (uid, uid, role, when))
+        # Wind back to 1.0: no audit_access column.
+        cur.execute("ALTER TABLE users DROP COLUMN audit_access")
+        cur.execute("DELETE FROM schema_versions")
+        cur.execute("INSERT INTO schema_versions (version) VALUES (19)")
+    pg.commit()
+
+    def holders():
+        with pg.cursor() as cur:
+            cur.execute("SELECT user_id FROM users WHERE audit_access ORDER BY user_id")
+            ids = [r["user_id"] for r in cur.fetchall()]
+        pg.rollback()
+        return ids
+
+    dbm.migrate(pg)
+    assert holders() == ["u-org1"]
+    with pg.cursor() as cur:                     # u-org1 hands it to u-org2 and drops it
+        cur.execute("UPDATE users SET audit_access = (user_id = 'u-org2')")
+    pg.commit()
+    dbm.migrate(pg)                              # in progress: re-runs, grants nothing new
+    assert holders() == ["u-org2"]

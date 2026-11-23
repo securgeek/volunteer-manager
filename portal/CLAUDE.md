@@ -99,15 +99,15 @@ during their own request. Every other volunteer message is an offline act by who
 
 ### Admin mail: the one exception
 
-`POST /api/sync/send_admin_mail` mails **organizer** invites and password resets, and
-**early-access signup invites** to would-be volunteers, for the scheduler, which has no mail
-path of its own. The address there comes from the scheduler, not
+`POST /api/sync/send_admin_mail` mails **organizer** invites and password resets,
+**early-access signup invites** to would-be volunteers, and **security alerts** to organizers,
+for the scheduler, which has no mail path of its own. The address there comes from the scheduler, not
 from someone proving it, so the endpoint is kept narrow:
 
 - signed sync API only, with `op_id` replay like every POST (a retry doesn't send twice);
-- three fixed templates (`templates/admin_invite.txt`, `admin_reset.txt`,
-  `signup_invite.txt`, via `Mailer.send_admin`), kind `invite`, `reset` or `signup_invite`,
-  plain text;
+- four fixed templates (`templates/admin_invite.txt`, `admin_reset.txt`, `admin_alert.txt`
+  via `Mailer.send_admin`, and the organizers' signup invite), kind `invite`, `reset`,
+  `alert` or `signup_invite`, plain text;
 - the link must start with the organizer site's own `{ADMIN_PUBLIC_URL}/admin/invite?t=` or
   `/admin/reset?t=` (matching the kind), with no whitespace. `ADMIN_PUBLIC_URL` falls back to
   `PORTAL_PUBLIC_URL` (`config.admin_url`); deployed, it's a separate hostname, because the
@@ -115,13 +115,26 @@ from someone proving it, so the endpoint is kept narrow:
 - one address, checked against a strict pattern (no header injection);
 - a `signup_invite` link must start with the portal's own
   `{PORTAL_PUBLIC_URL}/apply/signup?invite=`;
-- at most 20 admin mails an hour, and separately 200 signup invites an hour
+- an `alert` link must be exactly `{ADMIN_PUBLIC_URL}/admin/audit`, and its text is
+  **structured and defanged** (`_alert_values`, `alert_text`): `rule` matches
+  `^[a-z0-9][a-z0-9_.]{0,63}$`, `severity` is one of five, `title` ≤ 120 characters,
+  `held_back` an int, and `facts` at most 10 `[label, value]` pairs (≤ 40 / ≤ 200). Every
+  string has control and format characters (newlines, NUL, bidi) turned to spaces, `{{`
+  broken so it can't reach the template filler, and link-shaped text broken
+  (`https[:]//`, `www[.]`, `javascript[:]`). Alert details include things an attacker typed
+  (a username at sign-in), so they mustn't arrive as a clickable link in an organizer's inbox.
+  A bare domain (`evil.example`, no scheme or `www.`) is left alone, and some mail apps
+  link those anyway; the template's footer tells the reader the details are untrusted;
+- at most 20 admin mails an hour, separately 200 signup invites an hour
   (`SIGNUP_INVITE_MAIL_PER_HOUR`, under the relay's 300 so sign-in links still get through
-  during a batch), both counted from `portal_audit`, otherwise 429;
+  during a batch), and separately 60 alerts an hour (`ALERT_MAIL_PER_HOUR`, so a burst of
+  alerts can't use up the allowance password resets need, mid-attack), all counted from
+  `portal_audit`, otherwise 429;
 - audit and `sync_ops` record only `admin_mail.sent <kind>`, never the address or link.
 
 A compromised scheduler could therefore send its own site's invite, reset or signup-invite
-links to addresses it chose, but nothing else. `test_admin_mail.py` pins each of these.
+links to addresses it chose, or an alert of short, single-line, defanged text pointing at
+its own `/admin/audit`, but nothing else. `test_admin_mail.py` pins each of these.
 
 ## Auth invariants
 

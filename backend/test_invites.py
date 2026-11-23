@@ -528,3 +528,52 @@ def test_prune_keeps_the_retention_window(app, audit_file, monkeypatch):
         assert kept() == ["1 days old", "29 days old"]
     finally:
         dbm.put_conn(conn)
+
+
+# ── alerts against the real tables ────────────────────────────────────────────
+
+@pytest.fixture
+def watching(audit_file):
+    """The alert rules watching every audit event, with the table on (audit_file)."""
+    import alerts
+    audit.add_observer(alerts.observe)
+    yield alerts
+    audit.remove_observer(alerts.observe)
+
+
+def test_alerts_go_to_organizers_with_audit_access_and_an_address(app):
+    import alerts
+    _sql("UPDATE users SET audit_access = FALSE")
+    _sql("UPDATE users SET audit_access = TRUE WHERE username IN ('alice', 'bob')")
+    _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
+         "('u-carol', 'carol', 'x', 'organizer', 'carol@example.com') ON CONFLICT DO NOTHING")
+    try:
+        # bob has access but no address and isn't an organizer; carol has no access.
+        assert alerts.recipients() == [{"username": "alice", "email": "alice@example.com"}]
+    finally:
+        _sql("DELETE FROM users WHERE user_id = 'u-carol'")
+        _sql("UPDATE users SET audit_access = FALSE")
+
+
+def test_a_sign_in_from_a_new_network_alerts_but_the_first_ever_does_not(app, watching):
+    def rules():
+        return [a.rule_id for a in watching._state.unsent]
+    assert _login(app, "bob", "bob-password", ip="10.20.0.1").status_code == 200
+    assert rules() == []                                # no history yet
+    assert _login(app, "bob", "bob-password", ip="10.20.0.77").status_code == 200
+    assert rules() == []                                # same /24
+    assert _login(app, "bob", "bob-password", ip="192.0.2.5").status_code == 200
+    assert rules() == ["login.new_network"]
+    assert _login(app, "bob", "bob-password", ip="192.0.2.6").status_code == 200
+    assert rules() == ["login.new_network"]             # that network is known now
+    (fired,) = [r for r in _audit_rows() if r["event"] == "alert.fired"]
+    assert fired["severity"] == "low" and fired["data"]["rule"] == "login.new_network"
+
+
+def test_a_burst_of_failed_sign_ins_is_an_alert_in_the_table(app, watching):
+    for i in range(10):
+        assert _login(app, f"ghost{i}", "x", ip="203.0.113.50").status_code == 401
+    fired = [r for r in _audit_rows() if r["event"] == "alert.fired"]
+    assert {f["data"]["rule"] for f in fired} == {"login.bruteforce.ip", "login.spray"}
+    assert all(f["severity"] == "high" for f in fired)
+    assert {a.rule_id for a in watching._state.unsent} == {"login.bruteforce.ip", "login.spray"}

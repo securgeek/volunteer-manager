@@ -115,7 +115,14 @@ jq -r '.ip' logs/audit.jsonl | sort | uniq -c | sort -rn | head        # busiest
 Each event is also a row in the `audit_events` table, which the admin site's Audit Log reads.
 The table keeps `AUDIT_RETENTION_DAYS` (365 by default); the file keeps everything.
 
-The list of event codes and their severities is `EVENTS` in `backend/audit.py`. The old
+The list of event codes and their severities is `EVENTS` in `backend/audit.py`.
+
+**Security alerts** (`backend/alerts.py`) watch those events: bursts of failed sign-ins, a
+password spray, account and role changes, credential changes made by someone else, a new
+email key or export key, refused export calls, and sign-ins or key use from a new network.
+A fired alert is recorded as `alert.fired` and emailed, through the portal, to organizers
+with audit-log access and an address on their account. Each kind fires at most once an hour
+for the same cause, and at most 15 alerts are mailed an hour in all. The old
 free-text `logs/audit.log` (before this change) is left as it was and no longer written.
 
 Successful healthchecks are left out of the access log, and a healthy, idle backend logs

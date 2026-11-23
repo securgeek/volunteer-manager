@@ -136,6 +136,10 @@ EVENTS: dict[str, Event] = {
     "schedule.clear": Event("info", "Cleared a slot"),
     "schedule.note": Event("info", "Set or cleared a slot note"),
     "schedule.structure": Event("info", "Changed the schedule's days, times or positions"),
+    # Alerts (alerts.py). Their own events are never fed back into the rules.
+    "alert.fired": Event("medium", "A security alert rule fired"),
+    "alert.mailed": Event("info", "A security alert was emailed"),
+    "alert.mail_fail": Event("medium", "A security alert could not be emailed"),
 }
 
 
@@ -145,6 +149,9 @@ class _AuditConfig:
 
     path: str | None = None
     to_db: bool = False
+    # Called with each record (alerts.observe). A list, not an import: alerts.py calls
+    # audit() itself, so audit.py can't import it.
+    observers: list = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -171,6 +178,27 @@ def configure(path: str | None, to_db: bool = False) -> None:
     """
     _config.path = path
     _config.to_db = to_db
+
+
+def add_observer(fn) -> None:
+    """Have `fn(record)` called with every audit record, after the file write and before the
+    row is stored. A failure in `fn` is logged and swallowed. Adding one twice is a no-op.
+
+    Args:
+        fn: A callable taking the record dict.
+    """
+    if fn not in _config.observers:
+        _config.observers.append(fn)
+
+
+def remove_observer(fn) -> None:
+    """Stop calling `fn` (tests).
+
+    Args:
+        fn: A callable passed to `add_observer`.
+    """
+    if fn in _config.observers:
+        _config.observers.remove(fn)
 
 
 def configured_to_db() -> bool:
@@ -239,25 +267,29 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
-def build_record(event: str, request: Request, s_id: str | None, message: str,
-                 who: str | None = None, **data) -> dict:
+def build_record(event: str, request: Request | None, s_id: str | None, message: str,
+                 who: str | None = None, *, severity: str | None = None, **data) -> dict:
     """The audit record for one event, before it's written. Separate from `audit()` so the
     record's shape can be tested without a file.
 
     Args:
         event: A code from `EVENTS`.
-        request: The request, for the client IP, method and path.
+        request: The request, for the client IP, method and path. None for an event with no
+            request behind it, such as an alert raised by a background task.
         s_id: The caller's session id; its cached username and user id go on the record.
         message: What happened, in words.
         who: A label for a caller with no session, such as an export API key. It wins over
             `s_id` as the actor.
+        severity: Overrides the registry's severity for this one record (an `alert.fired`
+            carries its alert's severity). Must be one of SEVERITIES.
         **data: Structured details (a target username, a key id, counts). Values must be
             JSON-serializable or have a useful `str()`.
 
     Returns:
         The record, ready for `json.dumps`.
     """
-    severity = EVENTS[event].severity if event in EVENTS else "info"
+    if severity not in SEVERITIES:
+        severity = EVENTS[event].severity if event in EVENTS else "info"
     actor, user_id = None, None
     if who:
         actor = who
@@ -271,9 +303,9 @@ def build_record(event: str, request: Request, s_id: str | None, message: str,
         "severity": severity,
         "actor": _clip(actor),
         "user_id": user_id,
-        "ip": client_ip(request) or "unknown",
-        "method": request.method,
-        "path": _clip(request.url.path),
+        "ip": (client_ip(request) or "unknown") if request else None,
+        "method": request.method if request else None,
+        "path": _clip(request.url.path) if request else None,
         "message": _clip(message),
         "data": {k: _clip(v) for k, v in data.items()},
     }
@@ -324,8 +356,8 @@ def _store(record: dict) -> None:
         db.put_conn(conn)
 
 
-def audit(event: str, request: Request, s_id: str | None, message: str,
-          who: str | None = None, **data) -> None:
+def audit(event: str, request: Request | None, s_id: str | None, message: str,
+          who: str | None = None, *, severity: str | None = None, **data) -> None:
     """Append one event to the audit log. Never raises.
 
     Args:
@@ -335,9 +367,10 @@ def audit(event: str, request: Request, s_id: str | None, message: str,
         message: What happened, in words. Caller-supplied text is safe here, but prefer
             putting it in `data` so it can be filtered on.
         who: A label for a caller with no session, such as an export API key.
+        severity: Overrides the registry's severity; see `build_record`.
         **data: Structured details; see `build_record`.
     """
-    if not (_config.path or _config.to_db):
+    if not (_config.path or _config.to_db or _config.observers):
         return
     if event not in EVENTS:
         log.warning("audit: unregistered event code %r", event)
@@ -345,7 +378,8 @@ def audit(event: str, request: Request, s_id: str | None, message: str,
         # ensure_ascii: every non-ASCII character is written as \uXXXX. Raw, U+2028/U+2029
         # and U+0085 are line breaks to some readers (Python's splitlines among them), and
         # bidi overrides such as U+202E reorder text in a terminal. jq decodes them all.
-        line = json.dumps(build_record(event, request, s_id, message, who, **data),
+        line = json.dumps(build_record(event, request, s_id, message, who,
+                                       severity=severity, **data),
                           ensure_ascii=True, default=str)
     except (TypeError, ValueError) as exc:
         log.error("audit: could not encode %s event: %s", event, exc)
@@ -356,5 +390,15 @@ def audit(event: str, request: Request, s_id: str | None, message: str,
                 f.write(line + "\n")
         except OSError as exc:
             log.error("audit: could not write %s event: %s", event, exc)
+    record = json.loads(line)               # plain JSON values from here on
+    # Observers (alerts.py) see the event before it's stored, so a rule asking "has this
+    # user signed in from here before?" doesn't find the event itself.
+    for observer in list(_config.observers):
+        try:
+            observer(record)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Deliberately broad: an alert rule's bug must not fail the request it watches.
+            log.error("audit: observer %s failed on %s: %s",
+                      getattr(observer, "__name__", observer), event, exc)
     if _config.to_db:
-        _store(json.loads(line))
+        _store(record)

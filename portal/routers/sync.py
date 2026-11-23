@@ -15,6 +15,7 @@ be retried without applying twice.
 import json
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -731,7 +732,14 @@ _CONTACT_ADDR = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 MAX_BRANDING_TEXT = 300
 _ADMIN_PATHS = {"invite": "/admin/invite?t=", "reset": "/admin/reset?t=",
-                "signup_invite": "/apply/signup?invite="}
+                "signup_invite": "/apply/signup?invite=", "alert": "/admin/audit"}
+# Security alerts from the scheduler (backend/alerts.py). Their own allowance, so a burst of
+# alerts can't use up the one invites and password resets share, and the reverse. Per message,
+# so with several recipients it's fewer alerts than this.
+ALERT_MAIL_PER_HOUR = 60
+_ALERT_SEVERITIES = ("info", "low", "medium", "high", "critical")
+_ALERT_RULE = re.compile(r"^[a-z0-9][a-z0-9_.]{0,63}$")
+_ALERT_MAX_FACTS = 10
 # Sent in the last hour, per allowance. One complete statement each.
 _ADMIN_MAIL_COUNT_SQL = (
     "SELECT COUNT(*) FROM portal_audit WHERE action = 'admin_mail.sent' "
@@ -739,6 +747,67 @@ _ADMIN_MAIL_COUNT_SQL = (
 _INVITE_MAIL_COUNT_SQL = (
     "SELECT COUNT(*) FROM portal_audit WHERE action = 'admin_mail.sent' "
     "AND detail = 'signup_invite' AND ts > ?")
+_ALERT_MAIL_COUNT_SQL = (
+    "SELECT COUNT(*) FROM portal_audit WHERE action = 'admin_mail.sent' "
+    "AND detail = 'alert' AND ts > ?")
+
+
+def alert_text(value: Any, limit: int) -> str:
+    """One line of alert text that's safe to put in a plain-text email.
+
+    An alert's details can come from whoever set it off (a username typed at sign-in, a
+    user agent), so this assumes the worst: control and format characters (newlines, NUL,
+    bidi overrides) become spaces, runs of space collapse, `{{` can't reach the template
+    filler, and anything a mail app would turn into a link is broken (`https[:]//`,
+    `www[.]`). Then it's cut to `limit`.
+
+    Args:
+        value: Anything; it's turned into text first.
+        limit: The most characters to keep.
+
+    Returns:
+        The cleaned text, possibly empty.
+    """
+    text = "".join(" " if unicodedata.category(c)[0] in ("C", "Z") else c for c in str(value))
+    text = " ".join(text.split())
+    text = text.replace("{{", "{ {").replace("}}", "} }")
+    text = re.sub(r"://", "[:]//", text)
+    text = re.sub(r"(?i)\bwww\.", lambda m: m.group(0)[:-1] + "[.]", text)
+    text = re.sub(r"(?i)\b(mailto|javascript|data):", r"\1[:]", text)
+    return text[:limit].rstrip()
+
+
+def _alert_values(payload: dict) -> dict:
+    """The alert template's values, from the scheduler's request, every one checked.
+
+    Raises:
+        HTTPException 400: A field missing, of the wrong type or shape.
+    """
+    rule, severity = payload.get("rule"), payload.get("severity")
+    title, facts, held = payload.get("title"), payload.get("facts"), payload.get("held_back", 0)
+    if not isinstance(rule, str) or not _ALERT_RULE.match(rule):
+        raise HTTPException(status_code=400, detail="Bad alert rule")
+    if severity not in _ALERT_SEVERITIES:
+        raise HTTPException(status_code=400, detail="Bad alert severity")
+    title = alert_text(title, 120) if isinstance(title, str) else ""
+    if not title:
+        raise HTTPException(status_code=400, detail="Bad alert title")
+    if not isinstance(held, int) or isinstance(held, bool) or not 0 <= held <= 1_000_000:
+        raise HTTPException(status_code=400, detail="Bad alert count")
+    if (not isinstance(facts, list) or len(facts) > _ALERT_MAX_FACTS
+            or not all(isinstance(f, list) and len(f) == 2 for f in facts)):
+        raise HTTPException(status_code=400, detail="Bad alert facts")
+    pairs = [(alert_text(label, 40), alert_text(value, 200)) for label, value in facts]
+    pairs = [(label, value) for label, value in pairs if label and value]
+    width = max((len(label) for label, _ in pairs), default=0)
+    lines = "\n".join(f"  {label + ':':<{width + 1}} {value}" for label, value in pairs)
+    return {
+        "app_title": alert_text(payload.get("app_title") or "the conference", 100),
+        "severity": severity, "title": title, "facts": lines + "\n" if lines else "",
+        "held_back": (f"{held} more matching event{'s' if held != 1 else ''} came in after "
+                      "the last alert for this, and weren't mailed separately.\n"
+                      if held else ""),
+    }
 
 
 def _invite_template(conn: sqlite3.Connection) -> dict:
@@ -814,13 +883,16 @@ async def push_content(body: bytes = Depends(verified_body),
 @router.post("/api/sync/send_admin_mail")
 async def send_admin_mail(body: bytes = Depends(verified_body),
                           conn: sqlite3.Connection = Depends(db.get_db)):
-    """Mail an admin invite, password reset or volunteer signup invite for the scheduler.
+    """Mail an admin invite, password reset, volunteer signup invite or security alert for
+    the scheduler.
 
     The one exception to "the portal only mails an address someone has just proved they
-    know" (CLAUDE.md), and so kept narrow: a signed request, one of three fixed templates, and
+    know" (CLAUDE.md), and so kept narrow: a signed request, one of four fixed templates, and
     a link that must be this deployment's own — the organizer site's (ADMIN_PUBLIC_URL)
-    /admin/invite or /admin/reset, or the portal's own (PORTAL_PUBLIC_URL) /apply/signup?invite=.
-    Admin mail is at most ADMIN_MAIL_PER_HOUR, signup invites SIGNUP_INVITE_MAIL_PER_HOUR.
+    /admin/invite or /admin/reset, exactly /admin/audit for an alert, or the portal's own
+    (PORTAL_PUBLIC_URL) /apply/signup?invite=. An alert's text fields are checked and
+    defanged by `_alert_values`. Admin mail is at most ADMIN_MAIL_PER_HOUR, signup invites
+    SIGNUP_INVITE_MAIL_PER_HOUR, alerts ALERT_MAIL_PER_HOUR, each its own allowance.
     Neither the address nor the link is stored; the audit line records the kind. op_id makes a
     retried request a replay, not a second email.
 
@@ -841,9 +913,14 @@ async def send_admin_mail(body: bytes = Depends(verified_body),
     if not isinstance(link, str) or not link.startswith(base + _ADMIN_PATHS[kind]) \
             or any(c.isspace() for c in link):
         raise HTTPException(status_code=400, detail="That link isn't this site's")
+    if kind == "alert" and link != base + _ADMIN_PATHS["alert"]:
+        raise HTTPException(status_code=400, detail="That link isn't this site's")
+    values = _alert_values(payload) if kind == "alert" else None
     since = clock.iso(clock.now() - timedelta(hours=1))
     if kind == "signup_invite":
         sql, cap, what = _INVITE_MAIL_COUNT_SQL, SIGNUP_INVITE_MAIL_PER_HOUR, "invite"
+    elif kind == "alert":
+        sql, cap, what = _ALERT_MAIL_COUNT_SQL, ALERT_MAIL_PER_HOUR, "alert"
     else:
         sql, cap, what = _ADMIN_MAIL_COUNT_SQL, ADMIN_MAIL_PER_HOUR, "admin"
     if conn.execute(sql, (since,)).fetchone()[0] >= cap:
@@ -854,6 +931,8 @@ async def send_admin_mail(body: bytes = Depends(verified_body),
             subject, text = content.render_invite(_invite_template(conn),
                                                   _invite_values(conn, link, payload))
             Mailer(settings).send(to, subject, text)
+        elif kind == "alert":
+            Mailer(settings).send_admin(kind, to, link, values)
         else:
             Mailer(settings).send_admin(kind, to, link, payload)
     except Exception as exc:                                    # noqa: BLE001
