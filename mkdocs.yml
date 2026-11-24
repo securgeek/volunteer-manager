@@ -67,6 +67,10 @@ plugins:
             filters: ["!^_"]
             merge_init_into_class: true
 
+# mkdocs serve also reloads when the changelog (outside docs/) changes.
+watch:
+  - CHANGELOG.md
+
 markdown_extensions:
   - tables
   - attr_list
@@ -80,6 +84,11 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+  # --8<-- "FILE" includes a file from the repo root: docs/changelog.md is CHANGELOG.md, so the
+  # changelog has one source. check_paths: a missing file fails the build instead of vanishing.
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
 
 nav:
   - Home: index.md
@@ -104,6 +113,7 @@ nav:
       - SBOM and vulnerabilities: security/sbom.md
       - Bandit results: security/bandit.md
   - Quality & security: development/quality-and-security.md
+  - Changelog: changelog.md
   - Code reference: reference/
 
 # The version menu in the header, filled in from the versions mike has published.

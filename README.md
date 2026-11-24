@@ -181,7 +181,8 @@ the database they're pointed at. See
 
 ## Documentation
 
-The [documentation site](https://securgeek.github.io/volunteer-manager/) has one version per
+What changed in each release is in [CHANGELOG.md](CHANGELOG.md). The
+[documentation site](https://securgeek.github.io/volunteer-manager/) has one version per
 release:
 
 - [Organizer guide](https://securgeek.github.io/volunteer-manager/latest/guides/organizer/):
