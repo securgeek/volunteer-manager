@@ -189,7 +189,8 @@ RULES: tuple[Rule, ...] = (
     Rule("setup.after_complete", "First-admin setup called on a set-up site", "medium",
          frozenset({"setup.create_admin.refused"}), _ip_key),
     Rule("account.privilege", "An organizer-site account was created or its role changed",
-         "medium", frozenset({"user.create", "user.role_change", "invite.accept"}), _per_event),
+         "medium", frozenset({"user.create", "user.role_change", "invite.accept",
+                              "user.audit_access"}), _per_event),
     Rule("account.credentials", "An account's password, passkeys or reset address was changed "
          "by someone else", "medium",
          frozenset({"password.reset.by_admin", "passkey.clear_user", "user.email_set",
@@ -395,7 +396,7 @@ def _app_title() -> str:
         db.put_conn(conn)
 
 
-async def deliver(alert: Alert) -> int:
+async def deliver(alert: Alert, retry: bool = True) -> int:
     """Email one alert to every recipient, retrying each once after MAIL_RETRY_SEC.
 
     Records `alert.mailed` (how many it reached) or `alert.mail_fail` (whom it didn't, by
@@ -403,6 +404,7 @@ async def deliver(alert: Alert) -> int:
 
     Args:
         alert: The alert.
+        retry: Retry a failed send once. Off for the test alert, whose caller is waiting.
 
     Returns:
         How many recipients it reached.
@@ -420,7 +422,7 @@ async def deliver(alert: Alert) -> int:
     link = f"{portal_sync.site_origin()}/admin/audit"
     reached = 0
     for person in people:
-        for attempt in (1, 2):
+        for attempt in ((1, 2) if retry else (2,)):
             try:
                 await portal_sync.send_admin_mail("alert", person["email"], link, **fields)
                 reached += 1

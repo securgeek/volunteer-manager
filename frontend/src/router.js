@@ -21,7 +21,9 @@ const routes = [
       { path: 'me',     component: () => import('./views/apply/ApplyMe.vue'), meta: { signedIn: true } },
     ],
   },
-  { path: '/admin', component: () => import('./views/Admin.vue') },
+  // /admin/audit is the Audit Log tab: security alert emails link there. An alias, not a second
+  // route, so switching tabs doesn't remount the whole organizer app.
+  { path: '/admin', alias: '/admin/audit', component: () => import('./views/Admin.vue') },
   // Emailed links. Both are inert on load (a GET check only); the button POSTs the token.
   { path: '/admin/invite', component: () => import('./views/AcceptInvite.vue') },
   { path: '/admin/reset',  component: () => import('./views/ResetPassword.vue') },

@@ -1,11 +1,12 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import Dialog    from 'primevue/dialog'
 import Button    from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Password  from 'primevue/password'
 import Select    from 'primevue/select'
 import Message   from 'primevue/message'
+import Checkbox  from 'primevue/checkbox'
 
 const ROLES = [
   { label: 'Organizer', value: 'organizer' },
@@ -91,6 +92,25 @@ function fmt_date(iso) {
 
 function is_self(user) {
   return user.username === current_username
+}
+
+// ── audit log access ──────────────────────────────────────────────────────────
+// Reading the audit log and getting security alerts (backend routers/audit_log.py). Only
+// someone who has it can give or take it, only organizers can have it, and the last one
+// can't lose it (the server says so if you try).
+const can_grant = computed(() => users.value.some(u => is_self(u) && u.audit_access && u.role === 'organizer'))
+
+async function set_audit_access(user) {
+  err.value = ''
+  const fd = new FormData()
+  fd.append('user_id', user.user_id)
+  fd.append('grant', user.audit_access ? '1' : '0')
+  const resp = await fetch('/api/users/set_audit_access', { method: 'POST', body: fd })
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => null)
+    err.value = body?.detail || 'Failed to change audit log access.'
+  }
+  load()
 }
 
 // ── role change ───────────────────────────────────────────────────────────────
@@ -275,7 +295,7 @@ async function add_user() {
 
 <template>
   <Dialog v-model:visible="visible" header="User Management"
-          :style="{ width: '68rem' }" modal>
+          :style="{ width: '72rem', maxWidth: '95vw' }" modal>
 
     <Message v-if="err" severity="error" :closable="false" style="margin-bottom:0.75rem;">
       {{ err }}
@@ -291,6 +311,7 @@ async function add_user() {
         <span>Last login</span>
         <span>Failed logins</span>
         <span>Passkeys</span>
+        <span v-tooltip.top="'Can read the audit log and gets security alerts'">Audit log</span>
         <span></span>
       </div>
 
@@ -320,6 +341,14 @@ async function add_user() {
             <span v-else>—</span>
           </span>
           <span class="muted center">{{ user.passkey_count || '—' }}</span>
+          <span class="center">
+            <Checkbox v-model="user.audit_access" binary
+                      :disabled="!can_grant || (user.role !== 'organizer' && !user.audit_access)"
+                      :aria-label="`Audit log access for ${user.username}`"
+                      v-tooltip.top="!can_grant ? 'Only someone with audit log access can change this'
+                                     : user.role !== 'organizer' ? 'Organizers only' : ''"
+                      @change="set_audit_access(user)" />
+          </span>
           <div class="actions">
             <Button size="small" icon="pi pi-key" severity="secondary" variant="text"
                     v-tooltip.top="'Reset password'"
@@ -442,7 +471,7 @@ async function add_user() {
 .user-block  { border-bottom: 1px solid var(--p-content-border-color); }
 .user-row    {
   display: grid;
-  grid-template-columns: 1fr 9rem 1.4fr 11rem 6rem 5rem 7rem;
+  grid-template-columns: 1fr 9rem 1.4fr 11rem 6rem 5rem 5rem 7rem;
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.25rem;

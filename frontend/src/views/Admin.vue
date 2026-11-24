@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, useTemplateRef, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { startEvents, stopEvents, useEvents } from '../composables/useEvents.js'
 import Button    from 'primevue/button'
 import Menu      from 'primevue/menu'
@@ -31,6 +32,7 @@ import ProfileDialog   from '../components/ProfileDialog.vue'
 import ScheduleView    from '../components/ScheduleView.vue'
 import VolunteersTab   from './admin/VolunteersTab.vue'
 import RadiosTab       from './admin/RadiosTab.vue'
+import AuditTab        from './admin/AuditTab.vue'
 import VolunteerCheckin from '../components/VolunteerCheckin.vue'
 
 // ── state ─────────────────────────────────────────────────────────────────────
@@ -128,9 +130,24 @@ on('rating',     () => load_schedule())
 on('radio',      () => radios_tab_ref.value?.reload())
 
 watch(view, (v) => {
-  if (v === 'app') { load_schedule(); startEvents(); refresh_pending() }
+  if (v === 'app') { load_schedule(); startEvents(); refresh_pending(); load_access() }
   else             { stopEvents() }
 })
+
+// ── audit log access ──────────────────────────────────────────────────────────
+// The Audit Log tab is for organizers holding audit-log access (backend routers/audit_log.py),
+// asked of the server, which checks it on every request too. null until known.
+const route  = useRoute()
+const router = useRouter()
+const audit_access = ref(null)
+async function load_access() {
+  try {
+    const resp = await fetch('/api/users/me')
+    audit_access.value = resp.ok ? !!(await resp.json()).audit_access : false
+  } catch { audit_access.value = false }
+  if (audit_access.value && route.path === '/admin/audit') tab.value = 'audit'
+  if (!audit_access.value && tab.value === 'audit') tab.value = 'schedule'
+}
 
 function on_schedule_updated(new_schedule) {
   schedule.value = new_schedule
@@ -151,7 +168,12 @@ function saved_tab() {
   try { return localStorage.getItem(TAB_KEY) || 'schedule' } catch { return 'schedule' }
 }
 const tab = ref(saved_tab())
-watch(tab, (t) => { try { localStorage.setItem(TAB_KEY, t) } catch { /* private mode */ } })
+watch(tab, (t) => {
+  try { localStorage.setItem(TAB_KEY, t) } catch { /* private mode */ }
+  // The address follows the Audit Log tab, so it can be bookmarked and alert links land on it.
+  if (t === 'audit' && route.path !== '/admin/audit') router.replace('/admin/audit')
+  if (t !== 'audit' && route.path === '/admin/audit') router.replace('/admin')
+})
 // Only once the role is known: before the session loads it's '' and would reset every time.
 watch(() => user_info.value.role, (role) => {
   if (role && !ADMIN_ROLES.includes(role) && tab.value === 'volunteers') tab.value = 'schedule'
@@ -237,6 +259,7 @@ async function logout() {
   localStorage.removeItem('bsc_username')
   localStorage.removeItem('bsc_role')
   user_info.value = { username: '', role: '' }
+  audit_access.value = null
   view.value      = 'login'
 }
 </script>
@@ -280,6 +303,7 @@ async function logout() {
           Volunteers <Badge v-if="pending_count" :value="pending_count" severity="warn" />
         </Tab>
         <Tab value="radios">Radios</Tab>
+        <Tab v-if="audit_access" value="audit">Audit Log</Tab>
       </TabList>
       <TabPanels>
         <TabPanel value="schedule">
@@ -300,6 +324,9 @@ async function logout() {
         </TabPanel>
         <TabPanel value="radios">
           <RadiosTab ref="radios_tab" :role="user_info.role" />
+        </TabPanel>
+        <TabPanel v-if="audit_access" value="audit">
+          <AuditTab />
         </TabPanel>
       </TabPanels>
     </Tabs>

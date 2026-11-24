@@ -89,6 +89,8 @@ EVENTS: dict[str, Event] = {
     "invite.create": Event("medium", "Created an organizer-site invite"),
     "invite.revoke": Event("info", "Revoked an organizer-site invite"),
     "invite.accept": Event("medium", "Accepted an organizer-site invite"),
+    "user.audit_access": Event("medium", "Gave or took away audit log access"),
+    "audit.view": Event("info", "Opened the audit log"),
     # First-run setup and site settings
     "setup.create_admin": Event("high", "Created the first admin account"),
     "setup.create_admin.refused": Event("medium", "First-admin setup called after setup"),
@@ -147,6 +149,7 @@ EVENTS: dict[str, Event] = {
     "alert.fired": Event("medium", "A security alert rule fired"),
     "alert.mailed": Event("info", "A security alert was emailed"),
     "alert.mail_fail": Event("medium", "A security alert could not be emailed"),
+    "alert.test": Event("info", "Sent a test alert"),
 }
 
 

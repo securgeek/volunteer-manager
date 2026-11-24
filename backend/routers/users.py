@@ -13,6 +13,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
 from audit import audit
+from routers.audit_log import require_audit_access
 from db import get_db, get_session_data, RoleChecker, PgClient
 
 router = APIRouter()
@@ -21,14 +22,35 @@ router = APIRouter()
 # (routers/passkeys.py). The two statements share their column list; keep them in step.
 _LIST_USERS_SQL = (
     "SELECT user_id, username, role, email, created_at, last_login_at, failed_login_cnt, "
+    "audit_access, "
     "(SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = users.user_id) AS passkey_count "
     "FROM users ORDER BY username;"
 )
 _GET_USER_SQL = (
     "SELECT user_id, username, role, email, created_at, last_login_at, failed_login_cnt, "
+    "audit_access, "
     "(SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = users.user_id) AS passkey_count "
     "FROM users WHERE user_id = ?;"
 )
+
+
+# The audit log must always have someone who can read it: an organizer holding audit_access
+# (routers/audit_log.py). These guard the ways the last such person could stop being one.
+_IS_HOLDER_SQL = (
+    "SELECT (audit_access AND role = 'organizer') AS holder FROM users WHERE user_id = ?;"
+)
+_OTHER_HOLDERS_SQL = (
+    "SELECT COUNT(*) AS n FROM users WHERE audit_access AND role = 'organizer' AND user_id <> ?;"
+)
+LAST_HOLDER = ("{who} the only one who can read the audit log. Give someone else "
+               "audit log access first.")
+
+
+def _last_holder(db: PgClient, user_id: str) -> bool:
+    """Whether `user_id` is the only organizer holding audit-log access."""
+    row = db.execute(_IS_HOLDER_SQL, (user_id,)).fetchone()
+    return bool(row and row["holder"]
+                and db.execute(_OTHER_HOLDERS_SQL, (user_id,)).fetchone()["n"] == 0)
 
 
 @router.get("/api/users")
@@ -126,6 +148,7 @@ def set_user_role(
     Raises:
         HTTPException 400: Attempting to change own role, or invalid role value.
         HTTPException 404: User not found.
+        HTTPException 409: Demoting the only organizer with audit-log access.
         HTTPException 401/403: Insufficient role.
     """
     if user_id == s_data["user_id"]:
@@ -134,6 +157,8 @@ def set_user_role(
         raise HTTPException(status_code=400, detail="Invalid role")
     if not db.execute("SELECT 1 FROM users WHERE user_id = ?;", (user_id,)).fetchone():
         raise HTTPException(status_code=404, detail="User not found")
+    if role != "organizer" and _last_holder(db, user_id):
+        raise HTTPException(status_code=409, detail=LAST_HOLDER.format(who="That user is"))
     db.execute(
         "UPDATE users SET role = ?, updated_at = NOW() WHERE user_id = ?;",
         (role, user_id)
@@ -206,12 +231,15 @@ def delete_user(
     Raises:
         HTTPException 400: Attempting to delete own account.
         HTTPException 404: User not found.
+        HTTPException 409: Deleting the only organizer with audit-log access.
         HTTPException 401/403: Insufficient role.
     """
     if user_id == s_data["user_id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     if not db.execute("SELECT 1 FROM users WHERE user_id = ?;", (user_id,)).fetchone():
         raise HTTPException(status_code=404, detail="User not found")
+    if _last_holder(db, user_id):
+        raise HTTPException(status_code=409, detail=LAST_HOLDER.format(who="That user is"))
     db.execute("DELETE FROM users WHERE user_id = ?;", (user_id,))
     db.commit()
     audit("user.delete", request, request.session.get("session_id"), f"Deleted user {user_id!r}",
@@ -313,8 +341,9 @@ def my_account(
     """
     if not s_data:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    row = db.execute("SELECT username, role, email FROM users WHERE user_id = ?;",
-                     (s_data["user_id"],)).fetchone()
+    row = db.execute("SELECT username, role, email, "
+                     "(audit_access AND role = 'organizer') AS audit_access "
+                     "FROM users WHERE user_id = ?;", (s_data["user_id"],)).fetchone()
     if not row:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return dict(row)
@@ -359,3 +388,53 @@ def change_own_email(
     audit("user.email_change", request, request.session.get("session_id"),
           "Set own email" if address else "Cleared own email")
     return {"ok": True, "email": address}
+
+
+@router.post("/api/users/set_audit_access")
+def set_audit_access(
+    request: Request,
+    user_id: str = Form(...),
+    grant: str = Form(...),
+    s_data: dict = Depends(require_audit_access),
+    db: PgClient = Depends(get_db),
+):
+    """Give or take away audit-log access (reading the log and receiving security alerts).
+
+    Only someone who holds it can change it, only organizers can be given it, and the last
+    holder can't lose it. Every change is audited, and raises an alert.
+
+    Args:
+        request: The request, for the audit log.
+        user_id: The user to change.
+        grant: `1` to give access, `0` to take it away.
+        s_data: The caller's session; needs audit-log access itself.
+        db: The request's database connection.
+
+    Returns:
+        `{"ok": True, "audit_access": bool}`.
+
+    Raises:
+        HTTPException 400: `grant` isn't 0 or 1, or the user isn't an organizer.
+        HTTPException 404: No such user.
+        HTTPException 409: Taking it from the last holder.
+    """
+    if grant not in ("0", "1"):
+        raise HTTPException(status_code=400, detail="grant must be 0 or 1")
+    target = db.execute("SELECT username, role FROM users WHERE user_id = ?;",
+                        (user_id,)).fetchone()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if grant == "1" and target["role"] != "organizer":
+        raise HTTPException(status_code=400,
+                            detail="Only organizers can have audit log access.")
+    if grant == "0" and _last_holder(db, user_id):
+        who = "You are" if user_id == s_data["user_id"] else f"{target['username']} is"
+        raise HTTPException(status_code=409, detail=LAST_HOLDER.format(who=who))
+    db.execute("UPDATE users SET audit_access = ?, updated_at = NOW() WHERE user_id = ?;",
+               (grant == "1", user_id))
+    db.commit()
+    audit("user.audit_access", request, request.session.get("session_id"),
+          f"{'Gave' if grant == '1' else 'Took away'} audit log access "
+          f"{'to' if grant == '1' else 'from'} {target['username']!r}",
+          target=target["username"], target_user_id=user_id, grant=grant == "1")
+    return {"ok": True, "audit_access": grant == "1"}

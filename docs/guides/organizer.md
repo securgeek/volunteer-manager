@@ -205,6 +205,23 @@ Treat what's in an alert as untrusted. Details such as a username can be whateve
 attacker typed, and anything that looked like a link has been broken on purpose. Open the
 site yourself rather than following anything in the details.
 
+## The audit log
+
+**Audit Log** (a tab, for organizers with audit-log access) lists everything the site has
+recorded, newest first: sign-ins and failed attempts, account and role changes, schedule
+and volunteer changes, export API calls, attack patterns noticed in requests, and every
+alert. Filter by kind of event, severity, who, address, which site, or words in the message,
+and open a row to see its details. Alert emails link straight here.
+
+At first only the first organizer account has access. Anyone who has it can give it to
+another organizer, or take it away, from the **Audit log** column in **Admin → Users**.
+Everyone with access also gets the alert emails, if they have an address in Profile. The
+site won't let the last person with access lose it, by having it removed, their role
+changed or their account deleted, so someone can always read the log.
+
+The card at the top shows who alerts reach. **Send test alert** emails everyone there now,
+to check the mail path end to end.
+
 ## Your own account
 
 **Profile**, under your name in the top right, changes your own password and email. Both

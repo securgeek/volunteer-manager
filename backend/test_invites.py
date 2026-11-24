@@ -52,9 +52,9 @@ def app():
 
     from fastapi import FastAPI
     from starlette.middleware.sessions import SessionMiddleware
-    from routers import auth, invites, password_reset, users
+    from routers import audit_log, auth, invites, password_reset, users
     application = FastAPI()
-    for r in (auth, invites, password_reset, users):
+    for r in (auth, invites, password_reset, users, audit_log):
         application.include_router(r.router)
     application.add_middleware(SessionMiddleware, secret_key="test-secret")
 
@@ -157,7 +157,8 @@ def test_an_invite_is_mailed_and_accepted(app, sent):
                                             "email": "new.person@example.com"})
     assert r.status_code == 200 and r.json() == {"username": "carol", "role": "checkin"}
     assert c.get("/api/users/me").json() == {"username": "carol", "role": "checkin",
-                                            "email": "new.person@example.com"}
+                                            "email": "new.person@example.com",
+                                            "audit_access": False}
     # Spent, and the invite row no longer holds the address.
     assert c.get("/api/invites/check", params={"t": t}).json() == {"valid": False}
     assert _sql("SELECT email, used_by FROM user_invites WHERE invite_id = %s",
@@ -577,3 +578,142 @@ def test_a_burst_of_failed_sign_ins_is_an_alert_in_the_table(app, watching):
     assert {f["data"]["rule"] for f in fired} == {"login.bruteforce.ip", "login.spray"}
     assert all(f["severity"] == "high" for f in fired)
     assert {a.rule_id for a in watching._state.unsent} == {"login.bruteforce.ip", "login.spray"}
+
+
+# ── the Audit Log tab and who may see it ──────────────────────────────────────
+
+@pytest.fixture
+def holders():
+    """alice holds audit-log access; dora is a second organizer without it. Undone after."""
+    from argon2 import PasswordHasher
+    _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
+         "('u-dora', 'dora', %s, 'organizer', NULL) ON CONFLICT DO NOTHING",
+         (PasswordHasher().hash("dora-password"),))
+    _sql("UPDATE users SET audit_access = (user_id = 'u-alice')")
+    from routers import audit_log
+    audit_log._test_alerts.clear()
+    yield
+    _sql("DELETE FROM users WHERE user_id = 'u-dora'")
+    _sql("UPDATE users SET audit_access = FALSE, role = CASE user_id WHEN 'u-alice' THEN "
+         "'organizer' ELSE role END")
+
+
+def test_only_holders_read_the_audit_log(app, holders):
+    assert _client(app).get("/api/admin/audit").status_code == 401
+    assert _signed_in(app, "dora").get("/api/admin/audit").status_code == 403   # organizer
+    assert _signed_in(app, "bob").get("/api/admin/audit").status_code == 403     # checkin
+    alice = _signed_in(app)
+    assert alice.get("/api/admin/audit").status_code == 200
+    assert alice.get("/api/users/me").json()["audit_access"] is True
+    assert _signed_in(app, "dora").get("/api/users/me").json()["audit_access"] is False
+
+
+def test_taking_access_away_works_at_once(app, holders):
+    alice = _signed_in(app)
+    _sql("UPDATE users SET audit_access = TRUE WHERE user_id = 'u-dora'")
+    dora = _signed_in(app, "dora")
+    assert dora.get("/api/admin/audit").status_code == 200
+    assert alice.post("/api/users/set_audit_access",
+                      data={"user_id": "u-dora", "grant": "0"}).status_code == 200
+    assert dora.get("/api/admin/audit").status_code == 403       # same session, next request
+
+
+def test_listing_filters_and_pages(app, holders, audit_file):
+    for i in range(5):
+        _login(app, f"nobody{i}", "x", ip="10.7.0.1")             # auth.login.fail, low
+    _login(app, "bob", "bob-password", ip="10.7.0.2")             # auth.login.ok, info
+    alice = _signed_in(app)
+    body = alice.get("/api/admin/audit", params={"event": "auth.login.fail"}).json()
+    assert [e["event"] for e in body["events"]] == ["auth.login.fail"] * 5
+    assert body["events"][0]["ts"].endswith("Z") and body["events"][0]["data"]["username"]
+    page = alice.get("/api/admin/audit", params={"event": "auth.", "limit": 3}).json()
+    assert len(page["events"]) == 3 and page["next_before_id"]
+    rest = alice.get("/api/admin/audit", params={"event": "auth.", "limit": 3,
+                                                 "before_id": page["next_before_id"]}).json()
+    assert all(e["id"] < page["next_before_id"] for e in rest["events"])
+    low = alice.get("/api/admin/audit", params={"min_severity": "low"}).json()["events"]
+    assert "auth.login.ok" not in {e["event"] for e in low}
+    by_ip = alice.get("/api/admin/audit", params={"ip": "10.7.0.2"}).json()["events"]
+    assert {e["event"] for e in by_ip} == {"auth.login.ok"}
+
+
+def test_search_text_is_literal_not_a_pattern(app, holders, audit_file):
+    _login(app, "nobody", "x")
+    alice = _signed_in(app)
+    for wild in ("%", "_", "\\"):
+        assert alice.get("/api/admin/audit", params={"q": wild}).json()["events"] == []
+    assert alice.get("/api/admin/audit", params={"q": "invalid LOGIN"}).json()["events"]
+
+
+def test_bad_filters_are_refused(app, holders):
+    alice = _signed_in(app)
+    assert alice.get("/api/admin/audit", params={"min_severity": "urgent"}).status_code == 400
+    assert alice.get("/api/admin/audit", params={"source": "elsewhere"}).status_code == 400
+    assert alice.get("/api/admin/audit", params={"limit": 500}).status_code == 422
+
+
+def test_opening_the_log_is_itself_audited_once_per_visit(app, holders, audit_file):
+    alice = _signed_in(app)
+    first = alice.get("/api/admin/audit", params={"limit": 1}).json()
+    alice.get("/api/admin/audit", params={"limit": 1, "before_id": first["next_before_id"]})
+    views = [r for r in _audit_rows() if r["event"] == "audit.view"]
+    assert len(views) == 1 and views[0]["actor"] == "alice"
+
+
+def test_granting_and_revoking(app, holders, audit_file):
+    alice = _signed_in(app)
+    r = alice.post("/api/users/set_audit_access", data={"user_id": "u-bob", "grant": "1"})
+    assert r.status_code == 400 and "organizers" in r.json()["detail"]        # bob is checkin
+    assert _signed_in(app, "dora").post(
+        "/api/users/set_audit_access", data={"user_id": "u-dora", "grant": "1"}
+    ).status_code == 403                                                        # not a holder
+    assert alice.post("/api/users/set_audit_access",
+                      data={"user_id": "u-dora", "grant": "1"}).json()["audit_access"] is True
+    assert alice.post("/api/users/set_audit_access",
+                      data={"user_id": "u-alice", "grant": "0"}).status_code == 200   # dora has it
+    rows = [r for r in _audit_rows() if r["event"] == "user.audit_access"]
+    assert [r["data"]["grant"] for r in rows] == [True, False]
+    assert {u["username"]: u["audit_access"] for u in
+            _signed_in(app, "dora").get("/api/users").json()}["dora"] is True
+
+
+def test_the_last_holder_cant_be_removed_any_way(app, holders):
+    alice = _signed_in(app)
+    dora = _signed_in(app, "dora")
+    r = alice.post("/api/users/set_audit_access", data={"user_id": "u-alice", "grant": "0"})
+    assert r.status_code == 409 and r.json()["detail"].startswith("You are the only one")
+    r = dora.post("/api/users/set_role", data={"user_id": "u-alice", "role": "view"})
+    assert r.status_code == 409 and "only one who can read the audit log" in r.json()["detail"]
+    assert dora.post("/api/users/delete", data={"user_id": "u-alice"}).status_code == 409
+    # Not the last holder: the usual rules.
+    assert dora.post("/api/users/set_role",
+                      data={"user_id": "u-bob", "role": "view"}).status_code == 200
+    dora.post("/api/users/set_role", data={"user_id": "u-bob", "role": "checkin"})
+
+
+def test_status_says_who_alerts_reach(app, holders):
+    _sql("UPDATE users SET audit_access = TRUE WHERE user_id = 'u-dora'")
+    body = _signed_in(app).get("/api/admin/audit/status").json()
+    assert body["holders"] == [{"username": "alice", "has_email": True},
+                               {"username": "dora", "has_email": False}]
+    assert body["recipients"] == 1 and body["retention_days"] == 365
+
+
+def test_a_test_alert_is_mailed_and_limited(app, holders, sent, monkeypatch, audit_file):
+    import alerts
+    calls = []
+
+    async def send(kind, to, link, **fields):
+        calls.append((kind, to, fields["rule"], fields["title"]))
+        return {"ok": True}
+    monkeypatch.setattr(portal_sync, "send_admin_mail", send)
+    monkeypatch.setattr(portal_sync, "site_origin", lambda: SITE)
+    alice = _signed_in(app)
+    r = alice.post("/api/admin/audit/test_alert")
+    assert r.status_code == 200 and r.json() == {"reached": 1, "recipients": 1}
+    assert calls == [("alert", "alice@example.com", "test", "Test alert from the audit log page")]
+    r = alice.post("/api/admin/audit/test_alert")
+    assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0
+    events = [r["event"] for r in _audit_rows()]
+    assert "alert.test" in events and "alert.mailed" in events
+    assert alerts  # imported for the module's state; nothing queued for a test alert

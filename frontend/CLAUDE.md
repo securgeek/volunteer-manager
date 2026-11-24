@@ -20,7 +20,7 @@ src/
 ├── views/
 │   ├── Landing.vue      ← `/` — call for volunteers, from `GET /api/portal/landing` (organizer-editable); sends the admin host to /admin
 │   ├── Admin.vue        ← `/admin` — auth shell, setup wizard, toolbar menus, the three tabs
-│   ├── admin/           ← VolunteersTab.vue, RadiosTab.vue (Schedule's tab content is in Admin.vue)
+│   ├── admin/           ← VolunteersTab.vue, RadiosTab.vue, AuditTab.vue (Schedule's tab content is in Admin.vue)
 │   ├── AcceptInvite.vue ← `/admin/invite?t=` — an invitee makes their own account
 │   ├── ResetPassword.vue← `/admin/reset?t=` — set a new password from the emailed link
 │   └── apply/           ← `/apply/*` — volunteer portal (see Routing)
@@ -94,6 +94,7 @@ unknown path to the SPA, and `router.js` decides:
 | `/admin` | `Admin.vue` — the organizer app, unchanged | `/api/*` |
 | `/admin/invite?t=` | `AcceptInvite.vue` — username, password, optional email; signs in | `invites/check`, `invites/accept` |
 | `/admin/reset?t=` | `ResetPassword.vue` — new password; then sign in fresh | `password_reset/check`, `password_reset/complete` |
+| `/admin/audit` | `Admin.vue` on the Audit Log tab (an **alias** of `/admin`, so switching tabs doesn't remount the app); alert emails link here | `/api/admin/audit*` |
 
 - **`/admin` must stay lazy.** It carries the editors and the ZXing loader; the landing page is
   the only view in the main bundle, so a volunteer on conference wifi never downloads them.
@@ -476,6 +477,7 @@ Never mutate props. Spread-copy into a local `ref`: `const local = ref({ ...prop
 | Schedule | **Edit Schedule** (organizers), **Check In Volunteer** (organizer, checkin), the replacement / dropped-shift banners, the schedule | all |
 | Volunteers (pending badge) | `VolunteersTab.vue`: Add Volunteer and Decrypt emails, then awaiting approval, then the list | organizer |
 | Radios | `RadiosTab.vue`: Check Out / Check In, then out, available, log | all (forms for radio roles) |
+| Audit Log | `AuditTab.vue`: where alerts go (+ Send test alert), then the log, filtered, newest first, rows expand to their details | organizers with audit-log access (`/api/users/me` → `audit_access`) |
 
 The last tab is remembered per browser (`bsc_admin_tab`); a non-organizer is moved off
 Volunteers once their role is known. The banner's **Open** switches to Schedule first.
@@ -498,6 +500,13 @@ the account exists or has an email, so the page must not add its own "not found"
 from `/api/login` (too many failed sign-ins, `backend/CLAUDE.md` → Session and auth) shows
 its own message with the `Retry-After` wait in minutes, not "Invalid username or password",
 which would only prompt more attempts.
+
+**Audit Log tab.** Shown when `/api/users/me` says `audit_access` (loaded when the app
+opens; cleared on sign-out); the address follows the tab (`/admin/audit`). Everything in it
+came from the log, and parts were typed by whoever sent a request, so it's interpolated only,
+never `v-html`; a row's `data` is shown as `JSON.stringify` text. **Users** has an **Audit
+log** column: a checkbox only a holder can change, for organizers only; the server refuses
+taking it from the last holder and the dialog shows why.
 
 **Users → Invite Someone** (`UserManager.vue`) creates an invite for a role and an optional
 address. The link is shown once with Copy (the server keeps only its hash) and says whether

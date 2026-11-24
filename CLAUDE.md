@@ -197,6 +197,9 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
 - `backend/alerts.py` runs rules over those events and emails alerts through the portal
   (`send_admin_mail` kind `alert`) to organizers with `users.audit_access` and an email.
   See `backend/CLAUDE.md` → Security alerts; the plan is `plans/audit_alerting.md`.
+- **The Audit Log tab** (`/admin/audit`, where alert emails link) is for organizers with
+  `users.audit_access`, checked in the database on every request. Only a holder can grant
+  it (Users dialog), and the last holder can't be revoked, demoted or deleted.
 - Failed password sign-ins are rate limited (`backend/CLAUDE.md` → Session and auth).
 - `security_signals.py` (the **same file** in `backend/` and `portal/`; a test compares them)
   watches every request for attack patterns, probing and malformed input, and refuses only a
@@ -319,6 +322,9 @@ Frontend wizard state machine: `loading → create_admin → login → import_sc
 | GET  | `passkeys` | any (own) |
 | POST | `passkeys/rename`, `passkeys/delete` | any (own) |
 | POST | `passkeys/clear_user` | organizer |
+| GET  | `admin/audit` (filters, `before_id` paging), `admin/audit/status` | organizer with audit-log access |
+| POST | `admin/audit/test_alert` (one a minute) | organizer with audit-log access |
+| POST | `users/set_audit_access` (`user_id`, `grant`; not the last holder) | organizer with audit-log access |
 
 ### Schedule structure
 

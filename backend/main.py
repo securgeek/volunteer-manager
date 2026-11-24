@@ -25,7 +25,7 @@ import security_signals
 import portal_sync
 from routers import (auth, schedule, volunteers, users, email_keys, setup, events, radios,
                     portal_admin, passkeys, invites, password_reset, checkin, api_tokens,
-                    export, email_template, portal_content)
+                    export, email_template, portal_content, audit_log)
 
 
 class QuietPolls(logging.Filter):
@@ -196,6 +196,7 @@ app.include_router(api_tokens.router)
 app.include_router(export.router)
 app.include_router(email_template.router)
 app.include_router(portal_content.router)
+app.include_router(audit_log.router)
 
 if __name__ == "__main__":
     import uvicorn
