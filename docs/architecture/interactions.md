@@ -732,7 +732,7 @@ sequenceDiagram
     participant PG as Postgres audit_events
     participant W as alerts worker
     participant P as portal send_admin_mail (kind alert)
-    actor O as Organizers with audit_access
+    actor O as Organizers with audit_alerts
 
     X->>SS: POST /api/portal/signup/submit
     SS->>SS: signatures, scanner, probe path, NUL (400), cross-site

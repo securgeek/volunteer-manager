@@ -39,7 +39,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "changeme")
 # when the release is tagged (docs/operations/releasing.md).
 SCHEMA_RELEASES = (
     ("1.0", 19, None, False),
-    ("1.1", 20, "1.1.sql", True),       # audit_events, users.audit_access
+    ("1.1", 20, "1.1.sql", True),       # audit_events, users.audit_alerts
 )
 BASELINE_VERSION = SCHEMA_RELEASES[0][1]
 SCHEMA_VERSION = SCHEMA_RELEASES[-1][1]

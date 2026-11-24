@@ -127,7 +127,8 @@ findings come to the backend's audit log over the sync API. Nothing is blocked; 
 carrying a NUL character is the one refused, as no browser sends one.
 
 A fired alert is recorded as `alert.fired` and emailed, through the portal, to organizers
-with audit-log access and an address on their account. Each kind fires at most once an hour
+ticked for **Security alerts** in Admin → Users who have an address on their account. Every
+organizer can read the log itself (Admin → Audit Log). Each kind fires at most once an hour
 for the same cause, and at most 15 alerts are mailed an hour in all. The old
 free-text `logs/audit.log` (before release 1.1) is left as it was and no longer written.
 

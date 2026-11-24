@@ -89,7 +89,7 @@ EVENTS: dict[str, Event] = {
     "invite.create": Event("medium", "Created an organizer-site invite"),
     "invite.revoke": Event("info", "Revoked an organizer-site invite"),
     "invite.accept": Event("medium", "Accepted an organizer-site invite"),
-    "user.audit_access": Event("medium", "Gave or took away audit log access"),
+    "user.audit_alerts": Event("medium", "Turned security alert emails on or off for someone"),
     "audit.view": Event("info", "Opened the audit log"),
     # First-run setup and site settings
     "setup.create_admin": Event("high", "Created the first admin account"),

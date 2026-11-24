@@ -192,10 +192,10 @@ wrong or important, for example:
 - input to the volunteer pages that the pages themselves would never send, such as a name
   with digits or a field the form doesn't have. Someone is calling the portal directly.
 
-Alerts go to organizers who can read the audit log **and** have an email address in
-**Profile**. At first that's only the first organizer account. If nobody qualifies, alerts
-are still recorded but not sent, so add your address in Profile. Each alert links to the
-audit log.
+Alerts go to the organizers ticked under **Security alerts** in **Admin → Users** who have
+an email address in **Profile**. At first that's only the first organizer account; any
+organizer can tick or untick anyone. If nobody qualifies, alerts are still recorded but not
+sent, and the Users and Audit Log screens say so in red. Each alert links to the audit log.
 
 One kind of alert comes at most once an hour for the same cause. Anything more in that hour
 is counted and sent as a "(continued)" summary when the hour is up, so a sustained attack is
@@ -207,19 +207,13 @@ site yourself rather than following anything in the details.
 
 ## The audit log
 
-**Audit Log** (a tab, for organizers with audit-log access) lists everything the site has
-recorded, newest first: sign-ins and failed attempts, account and role changes, schedule
+**Admin → Audit Log** (for every organizer) lists everything the site has recorded, newest
+first: sign-ins and failed attempts, account and role changes, schedule
 and volunteer changes, export API calls, attack patterns noticed in requests, and every
 alert. Filter by kind of event, severity, who, address, which site, or words in the message,
 and open a row to see its details. Alert emails link straight here.
 
-At first only the first organizer account has access. Anyone who has it can give it to
-another organizer, or take it away, from the **Audit log** column in **Admin → Users**.
-Everyone with access also gets the alert emails, if they have an address in Profile. The
-site won't let the last person with access lose it, by having it removed, their role
-changed or their account deleted, so someone can always read the log.
-
-The card at the top shows who alerts reach. **Send test alert** emails everyone there now,
+The card at the top shows who alerts reach, and warns if that's nobody. **Send test alert** emails everyone there now,
 to check the mail path end to end.
 
 ## Your own account

@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS users (
     webauthn_user_id  BYTEA,
     -- For password reset only; sign-in is by username (v15).
     email             TEXT,
-    -- May read the audit log, and receives security alerts (1.1). Granted only by another
-    -- holder; the first admin gets it at setup (routers/setup.py).
-    audit_access      BOOLEAN NOT NULL DEFAULT FALSE
+    -- Gets security alerts by email (1.1, alerts.py). Organizers only; any organizer can
+    -- change it. The first admin gets it at setup (routers/setup.py).
+    audit_alerts      BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_webauthn_user_id
     ON users (webauthn_user_id) WHERE webauthn_user_id IS NOT NULL;
@@ -329,5 +329,9 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 CREATE INDEX IF NOT EXISTS audit_events_ts ON audit_events (ts);
 CREATE INDEX IF NOT EXISTS audit_events_event_ts ON audit_events (event, ts);
+
+-- Marks the one-time seeding of users.audit_alerts as done, so migrations/1.1.sql (re-run
+-- while 1.1 is in progress) doesn't tick anyone on a fresh install.
+INSERT INTO app_kv (app_key, val) VALUES ('audit_alerts_seeded', '1') ON CONFLICT DO NOTHING;
 
 COMMIT;

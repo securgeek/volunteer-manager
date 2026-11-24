@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import Dialog    from 'primevue/dialog'
 import Button    from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column    from 'primevue/column'
@@ -8,8 +9,10 @@ import Select    from 'primevue/select'
 import Tag       from 'primevue/tag'
 import Message   from 'primevue/message'
 
-// The Audit Log tab (backend routers/audit_log.py), for organizers holding audit-log access:
-// where security alerts go, and the audit_events table, newest first, filtered and paged.
+// Admin → Audit Log (backend routers/audit_log.py), for every organizer: where security
+// alerts go, and the audit_events table, newest first, filtered and paged. Opened with the
+// exposed open(); /admin/audit (the link in alert emails) opens it on load (Admin.vue), and
+// `closed` lets Admin.vue put the address back.
 //
 // Everything shown here is text from the log, and parts of it (a username typed at sign-in,
 // a user agent, a snippet of a request) were chosen by whoever sent the request. It's only
@@ -41,6 +44,8 @@ const SOURCES = [
   { label: 'Volunteer portal', value: 'portal' },
 ]
 const PAGE = 100
+const emit = defineEmits(['closed'])
+const visible = ref(false)
 
 const filters = reactive({ event: '', min_severity: 'info', actor: '', ip: '', source: '', q: '' })
 const events   = ref([])
@@ -75,10 +80,11 @@ async function load(more = false) {
 // Typing in a text filter reloads after a pause; the selects reload at once.
 let timer = null
 watch(() => [filters.actor, filters.ip, filters.q], () => {
+  if (!visible.value) return
   clearTimeout(timer)
   timer = setTimeout(() => load(), 400)
 })
-watch(() => [filters.event, filters.min_severity, filters.source], () => load())
+watch(() => [filters.event, filters.min_severity, filters.source], () => { if (visible.value) load() })
 
 function clear_filters() {
   Object.assign(filters, { event: '', min_severity: 'info', actor: '', ip: '', source: '', q: '' })
@@ -117,7 +123,7 @@ async function send_test() {
     const resp = await fetch('/api/admin/audit/test_alert', { method: 'POST' })
     const body = await resp.json().catch(() => ({}))
     if (!resp.ok) test_result.value = { ok: false, text: body.detail || 'The test alert failed.' }
-    else if (!body.recipients) test_result.value = { ok: false, text: 'No one to send it to: add an email address in Profile.' }
+    else if (!body.recipients) test_result.value = { ok: false, text: 'No one to send it to: tick Security alerts for someone in Admin → Users, with an email address.' }
     else if (body.reached === body.recipients)
       test_result.value = { ok: true, text: `Sent to ${body.reached} ${body.reached === 1 ? 'person' : 'people'}. Check your inbox.` }
     else test_result.value = { ok: false, text: `Reached ${body.reached} of ${body.recipients}. The failures are in the log below.` }
@@ -129,10 +135,18 @@ async function send_test() {
   }
 }
 
-onMounted(() => { load(); load_status() })
+function open() {
+  test_result.value = null
+  expanded.value = {}
+  visible.value = true
+  load(); load_status()
+}
+defineExpose({ open })
 </script>
 
 <template>
+  <Dialog v-model:visible="visible" header="Audit Log" modal maximizable
+          :style="{ width: '78rem', maxWidth: '96vw' }" @hide="emit('closed')">
   <div class="tab">
     <!-- where alerts go -->
     <section v-if="status" class="card">
@@ -142,20 +156,24 @@ onMounted(() => { load(); load_status() })
                 :loading="testing" @click="send_test" />
       </div>
       <Message v-if="!status.recipients" severity="error" :closable="false">
-        Alerts aren't reaching anyone: nobody with audit log access has an email address.
-        Add yours in Profile.
+        Alerts aren't being emailed to anyone, so nobody will hear about an attack until
+        they look here. Tick <strong>Security alerts</strong> for someone in Admin → Users,
+        and make sure they have an email address in Profile.
       </Message>
       <Message v-if="!status.portal_configured" severity="warn" :closable="false">
         The volunteer portal isn't connected, so alerts can't be emailed (they're still
         recorded here).
       </Message>
-      <p class="muted">
-        Alerts go to everyone with audit log access who has an email address:
-        <template v-for="(h, i) in status.holders" :key="h.username">
-          <span :class="{ missing: !h.has_email }">{{ h.username }}<template v-if="!h.has_email"> (no email)</template></span><template v-if="i < status.holders.length - 1">, </template>
+      <p v-if="status.alerted.length" class="muted">
+        Alerts are emailed to
+        <template v-for="(h, i) in status.alerted" :key="h.username">
+          <span :class="{ missing: !h.has_email }">{{ h.username }}<template v-if="!h.has_email"> (no email)</template></span><template v-if="i < status.alerted.length - 1">, </template>
         </template>.
-        Give someone else access under Admin → Users. This table keeps
-        {{ status.retention_days ? `${status.retention_days} days` : 'everything' }}.
+        Change who under Admin → Users (<strong>Security alerts</strong>).
+      </p>
+      <p class="muted">
+        This list keeps {{ status.retention_days ? `${status.retention_days} days` : 'everything' }}
+        of events.
       </p>
       <p v-if="status.last_alert" class="muted">
         Last alert: {{ status.last_alert.message }}, {{ when(status.last_alert.ts) }}.
@@ -220,6 +238,7 @@ onMounted(() => { load(); load_status() })
       <Button size="small" label="Load more" severity="secondary" :loading="loading" @click="load(true)" />
     </div>
   </div>
+  </Dialog>
 </template>
 
 <style scoped>

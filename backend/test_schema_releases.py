@@ -168,30 +168,53 @@ def test_1_1_adds_audit_events_to_a_1_0_database(pg):
     assert _version(pg) == 20
 
 
-def test_1_1_grants_audit_access_to_the_earliest_organizer_once(pg):
+def test_1_1_ticks_the_earliest_organizer_for_alerts_once(pg):
     dbm.migrate(pg)
     with pg.cursor() as cur:
         for uid, role, when in (("u-view", "view", "2025-01-01"), ("u-org2", "organizer",
                                 "2025-03-01"), ("u-org1", "organizer", "2025-02-01")):
             cur.execute("INSERT INTO users (user_id, username, password_hash, role, created_at) "
                         "VALUES (%s, %s, 'x', %s, %s)", (uid, uid, role, when))
-        # Wind back to 1.0: no audit_access column.
-        cur.execute("ALTER TABLE users DROP COLUMN audit_access")
+        # Wind back to 1.0: no audit_alerts column, no seeding marker.
+        cur.execute("ALTER TABLE users DROP COLUMN audit_alerts")
+        cur.execute("DELETE FROM app_kv WHERE app_key = 'audit_alerts_seeded'")
         cur.execute("DELETE FROM schema_versions")
         cur.execute("INSERT INTO schema_versions (version) VALUES (19)")
     pg.commit()
 
-    def holders():
+    def alerted():
         with pg.cursor() as cur:
-            cur.execute("SELECT user_id FROM users WHERE audit_access ORDER BY user_id")
+            cur.execute("SELECT user_id FROM users WHERE audit_alerts ORDER BY user_id")
             ids = [r["user_id"] for r in cur.fetchall()]
         pg.rollback()
         return ids
 
     dbm.migrate(pg)
-    assert holders() == ["u-org1"]
-    with pg.cursor() as cur:                     # u-org1 hands it to u-org2 and drops it
-        cur.execute("UPDATE users SET audit_access = (user_id = 'u-org2')")
+    assert alerted() == ["u-org1"]
+    with pg.cursor() as cur:                     # the organizers choose nobody
+        cur.execute("UPDATE users SET audit_alerts = FALSE")
     pg.commit()
-    dbm.migrate(pg)                              # in progress: re-runs, grants nothing new
-    assert holders() == ["u-org2"]
+    dbm.migrate(pg)                              # in progress: re-runs, ticks nobody again
+    assert alerted() == []
+
+
+def test_1_1_replaces_an_earlier_builds_audit_access(pg):
+    dbm.migrate(pg)
+    with pg.cursor() as cur:                     # what an earlier 1.1 build left behind
+        cur.execute("ALTER TABLE users ADD COLUMN audit_access BOOLEAN NOT NULL DEFAULT FALSE")
+    pg.commit()
+    dbm.migrate(pg)
+    with pg.cursor() as cur:
+        cur.execute("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'users' AND column_name LIKE 'audit%%'")
+        cols = {r["column_name"] for r in cur.fetchall()}
+    pg.rollback()
+    assert cols == {"audit_alerts"}
+
+
+def test_a_fresh_install_is_marked_seeded(pg):
+    dbm.migrate(pg)
+    with pg.cursor() as cur:
+        cur.execute("SELECT val FROM app_kv WHERE app_key = 'audit_alerts_seeded'")
+        assert cur.fetchone()["val"] == "1"
+    pg.rollback()

@@ -28,7 +28,7 @@ backend/
 │   ├── api_tokens.py← Admin → API Keys: create (shown once), list, revoke
 │   ├── export.py    ← GET export/schedule, export/volunteers (bearer keys); volunteer_records
 │   ├── email_template.py ← Schedule email template, images, preview, package download
-│   ├── audit_log.py ← The Audit Log tab's API; require_audit_access
+│   ├── audit_log.py ← Admin → Audit Log's API: events, alert status, test alert
 │   └── setup.py     ← Setup wizard endpoints (status, create_admin, CSV imports)
 ├── scheduler.sql    ← Full current schema, for a fresh DB
 ├── migrations/      ← One file per release after 1.0 (SCHEMA_RELEASES in db.py)
@@ -126,9 +126,11 @@ directly or add the observer themselves). `RULES` is the whole list:
   through `portal_sync.send_admin_mail("alert", …)`, retrying once after 60 s, and records
   `alert.mailed` (a count) or `alert.mail_fail` (by username, never address). Rules ignore
   `alert.*`, so nothing loops.
-- **Recipients** are `users` with `audit_access`, role organizer and an `email`
-  (`recipients()`). `audit_access` (1.1) is seeded on the earliest organizer and on the
-  first admin at setup; granting it is step 7 of `plans/audit_alerting.md`.
+- **Recipients** are `users` with `audit_alerts`, role organizer and an `email`
+  (`recipients()`). `audit_alerts` (1.1) is ticked once on the earliest organizer by the
+  migration (an `app_kv` marker, `audit_alerts_seeded`, stops a re-run ticking anyone
+  again) and on the first admin at setup; after that any organizer sets it
+  (`POST /api/users/set_audit_alerts`). It may be nobody.
 - **Facts** in the mail: event, time, client address, signed-in user, request, the count, and
   the event's `data` minus any key containing "email". The portal defangs them again
   (`portal/CLAUDE.md` → Admin mail).
@@ -140,26 +142,26 @@ directly or add the observer themselves). `RULES` is the whole list:
 - State is in memory (one worker); `alerts.reset()` clears it, and `conftest.py` does before
   every test.
 
-## The Audit Log tab (`routers/audit_log.py`)
+## The Audit Log (`routers/audit_log.py`)
 
-`require_audit_access` (a Depends) wants an organizer with `users.audit_access`, **read from the
-database every request**, not the session cache, so revoking or demoting takes effect on the
-next click. Who holds it:
+Admin → Audit Log in the organizer app. **Every organizer** may read it
+(`RoleChecker("organizer")`); check-in and view-only users can't.
 
-- the first admin (`setup/create_admin`), or the earliest organizer on an upgraded database
-  (1.1 migration); after that, only a holder can grant or revoke it
-  (`POST /api/users/set_audit_access`, organizers only, audited as `user.audit_access`, which
-  alerts);
-- **never nobody**: `routers/users.py` refuses (409, `LAST_HOLDER`) revoking, demoting
-  (`set_role`) or deleting the last organizer holding it.
+**Who gets alert emails** is a separate per-user flag, `users.audit_alerts` (Admin → Users,
+"Security alerts"): organizers only, set for anyone by any organizer
+(`POST /api/users/set_audit_alerts`, audited as `user.audit_alerts`, which itself alerts), and
+cleared in the same statement when `set_role` makes someone a non-organizer. It may be nobody:
+`/status` then reports `recipients: 0`, and the Audit Log and Users dialogs warn in red. (An
+earlier 1.1 build had `audit_access`, which gated reading too, with a last-holder guard; the
+1.1 migration drops it.)
 
 `GET /api/admin/audit` pages newest first by `before_id` (stable while rows arrive), with
 filters as bound `(? = '' OR …)` flags in one literal statement; LIKE input is escaped by
 `_like`, so `%` and `_` are literal. The first page of a visit is audited as `audit.view`.
-`/status` lists holders and whether each has an email (alerts reach those who do), and the
-last `alert.fired` / `alert.mail_fail`. `/test_alert` sends a real alert (rule `test`) through
-`alerts.deliver(retry=False)`, once a minute. `GET /api/users` and `/api/users/me` carry
-`audit_access`; the frontend shows the tab and the Users column from them.
+`/status` lists who is set to get alerts and whether each has an email (alerts reach those
+who do), and the last `alert.fired` / `alert.mail_fail`. `/test_alert` sends a real alert
+(rule `test`) through `alerts.deliver(retry=False)`, once a minute. `GET /api/users` carries
+`audit_alerts` for the Users column.
 
 ## Request signals (`security_signals.py`)
 

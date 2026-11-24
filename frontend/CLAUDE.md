@@ -20,7 +20,7 @@ src/
 ├── views/
 │   ├── Landing.vue      ← `/` — call for volunteers, from `GET /api/portal/landing` (organizer-editable); sends the admin host to /admin
 │   ├── Admin.vue        ← `/admin` — auth shell, setup wizard, toolbar menus, the three tabs
-│   ├── admin/           ← VolunteersTab.vue, RadiosTab.vue, AuditTab.vue (Schedule's tab content is in Admin.vue)
+│   ├── admin/           ← VolunteersTab.vue, RadiosTab.vue (Schedule's tab content is in Admin.vue)
 │   ├── AcceptInvite.vue ← `/admin/invite?t=` — an invitee makes their own account
 │   ├── ResetPassword.vue← `/admin/reset?t=` — set a new password from the emailed link
 │   └── apply/           ← `/apply/*` — volunteer portal (see Routing)
@@ -42,7 +42,8 @@ src/
     ├── VolunteerCheckin.vue ← Inline (Schedule tab): scan schedule-email codes; early/late confirm
     ├── EmailTemplate.vue    ← Call for Volunteers → Schedule Email: Markdown, images, live preview, package
     ├── ApiTokens.vue        ← Admin → API Keys: create (shown once), list, revoke
-    ├── UserManager.vue      ← List/add/role/password/email/delete users, clear passkeys, invites (organizer-only)
+    ├── UserManager.vue      ← List/add/role/password/email/delete users, clear passkeys, invites, security alerts (organizer-only)
+    ├── AuditLog.vue         ← Admin → Audit Log: where alerts go (+ Send test alert), the log filtered and paged
     ├── PortalLayout.vue     ← Volunteer pages' frame: logo header, title band, footer (Landing, ApplyShell)
     ├── ShiftPicker.vue      ← The two-shifts-plus-extras picker, shared by signup and ApplyMe editing
     ├── ShiftFlags.vue       ← Banner over the schedule: shifts needing a replacement (Open), and dropped shifts (Unassign / Keep)
@@ -94,7 +95,7 @@ unknown path to the SPA, and `router.js` decides:
 | `/admin` | `Admin.vue` — the organizer app, unchanged | `/api/*` |
 | `/admin/invite?t=` | `AcceptInvite.vue` — username, password, optional email; signs in | `invites/check`, `invites/accept` |
 | `/admin/reset?t=` | `ResetPassword.vue` — new password; then sign in fresh | `password_reset/check`, `password_reset/complete` |
-| `/admin/audit` | `Admin.vue` on the Audit Log tab (an **alias** of `/admin`, so switching tabs doesn't remount the app); alert emails link here | `/api/admin/audit*` |
+| `/admin/audit` | `Admin.vue` with **Admin → Audit Log** open (an **alias** of `/admin`, so opening and closing it doesn't remount the app); alert emails link here | `/api/admin/audit*` |
 
 - **`/admin` must stay lazy.** It carries the editors and the ZXing loader; the landing page is
   the only view in the main bundle, so a volunteer on conference wifi never downloads them.
@@ -469,7 +470,7 @@ Never mutate props. Spread-copy into a local `ref`: `const local = ref({ ...prop
 | Toolbar menu | Items | Roles |
 |---|---|---|
 | Call for Volunteers | Volunteer Portal, Shift Demand, Schedule Email | organizer |
-| Admin | Users, App Settings, Email Key, API Keys | organizer |
+| Admin | Users, App Settings, Email Key, API Keys, Audit Log | organizer |
 | *username* (right) | Profile, Sign Out | all |
 
 | Tab | Content | Roles |
@@ -477,7 +478,6 @@ Never mutate props. Spread-copy into a local `ref`: `const local = ref({ ...prop
 | Schedule | **Edit Schedule** (organizers), **Check In Volunteer** (organizer, checkin), the replacement / dropped-shift banners, the schedule | all |
 | Volunteers (pending badge) | `VolunteersTab.vue`: Add Volunteer and Decrypt emails, then awaiting approval, then the list | organizer |
 | Radios | `RadiosTab.vue`: Check Out / Check In, then out, available, log | all (forms for radio roles) |
-| Audit Log | `AuditTab.vue`: where alerts go (+ Send test alert), then the log, filtered, newest first, rows expand to their details | organizers with audit-log access (`/api/users/me` → `audit_access`) |
 
 The last tab is remembered per browser (`bsc_admin_tab`); a non-organizer is moved off
 Volunteers once their role is known. The banner's **Open** switches to Schedule first.
@@ -501,12 +501,15 @@ from `/api/login` (too many failed sign-ins, `backend/CLAUDE.md` → Session and
 its own message with the `Retry-After` wait in minutes, not "Invalid username or password",
 which would only prompt more attempts.
 
-**Audit Log tab.** Shown when `/api/users/me` says `audit_access` (loaded when the app
-opens; cleared on sign-out); the address follows the tab (`/admin/audit`). Everything in it
-came from the log, and parts were typed by whoever sent a request, so it's interpolated only,
-never `v-html`; a row's `data` is shown as `JSON.stringify` text. **Users** has an **Audit
-log** column: a checkbox only a holder can change, for organizers only; the server refuses
-taking it from the last holder and the dialog shows why.
+**Admin → Audit Log** (`AuditLog.vue`, a dialog with `open()`) is for every organizer.
+`/admin/audit` (an alias of `/admin`) opens it once the app has loaded, a non-organizer is
+sent to `/admin` instead, and the address follows the dialog open and closed (`open_audit`,
+`on_audit_closed` in Admin.vue). Everything in it came from the log, and parts were typed by
+whoever sent a request, so it's interpolated only, never `v-html`; a row's `data` is shown as
+`JSON.stringify` text. **Users** has a **Security alerts** column: who gets the alert emails,
+any organizer for any organizer, with a warning above the list when that's nobody with an
+address. The saved tab (`bsc_admin_tab`) falls back to Schedule if it names a tab that no
+longer exists (an earlier build had an Audit Log tab).
 
 **Users → Invite Someone** (`UserManager.vue`) creates an invite for a role and an optional
 address. The link is shown once with Copy (the server keeps only its hash) and says whether

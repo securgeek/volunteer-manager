@@ -157,8 +157,7 @@ def test_an_invite_is_mailed_and_accepted(app, sent):
                                             "email": "new.person@example.com"})
     assert r.status_code == 200 and r.json() == {"username": "carol", "role": "checkin"}
     assert c.get("/api/users/me").json() == {"username": "carol", "role": "checkin",
-                                            "email": "new.person@example.com",
-                                            "audit_access": False}
+                                            "email": "new.person@example.com"}
     # Spent, and the invite row no longer holds the address.
     assert c.get("/api/invites/check", params={"t": t}).json() == {"valid": False}
     assert _sql("SELECT email, used_by FROM user_invites WHERE invite_id = %s",
@@ -542,18 +541,18 @@ def watching(audit_file):
     audit.remove_observer(alerts.observe)
 
 
-def test_alerts_go_to_organizers_with_audit_access_and_an_address(app):
+def test_alerts_go_to_organizers_set_to_get_them_with_an_address(app):
     import alerts
-    _sql("UPDATE users SET audit_access = FALSE")
-    _sql("UPDATE users SET audit_access = TRUE WHERE username IN ('alice', 'bob')")
+    _sql("UPDATE users SET audit_alerts = FALSE")
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE username IN ('alice', 'bob')")
     _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
          "('u-carol', 'carol', 'x', 'organizer', 'carol@example.com') ON CONFLICT DO NOTHING")
     try:
-        # bob has access but no address and isn't an organizer; carol has no access.
+        # bob is ticked but has no address and isn't an organizer; carol isn't ticked.
         assert alerts.recipients() == [{"username": "alice", "email": "alice@example.com"}]
     finally:
         _sql("DELETE FROM users WHERE user_id = 'u-carol'")
-        _sql("UPDATE users SET audit_access = FALSE")
+        _sql("UPDATE users SET audit_alerts = FALSE")
 
 
 def test_a_sign_in_from_a_new_network_alerts_but_the_first_ever_does_not(app, watching):
@@ -580,42 +579,32 @@ def test_a_burst_of_failed_sign_ins_is_an_alert_in_the_table(app, watching):
     assert {a.rule_id for a in watching._state.unsent} == {"login.bruteforce.ip", "login.spray"}
 
 
-# ── the Audit Log tab and who may see it ──────────────────────────────────────
+# ── the Audit Log, and who gets the alerts ────────────────────────────────────
 
 @pytest.fixture
 def holders():
-    """alice holds audit-log access; dora is a second organizer without it. Undone after."""
+    """alice (organizer, with an address) gets alerts; dora is a second organizer who doesn't,
+    with no address. Undone after."""
     from argon2 import PasswordHasher
     _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
          "('u-dora', 'dora', %s, 'organizer', NULL) ON CONFLICT DO NOTHING",
          (PasswordHasher().hash("dora-password"),))
-    _sql("UPDATE users SET audit_access = (user_id = 'u-alice')")
+    _sql("UPDATE users SET audit_alerts = (user_id = 'u-alice')")
     from routers import audit_log
     audit_log._test_alerts.clear()
     yield
     _sql("DELETE FROM users WHERE user_id = 'u-dora'")
-    _sql("UPDATE users SET audit_access = FALSE, role = CASE user_id WHEN 'u-alice' THEN "
-         "'organizer' ELSE role END")
+    _sql("UPDATE users SET audit_alerts = FALSE, role = CASE user_id WHEN 'u-alice' THEN "
+         "'organizer' WHEN 'u-bob' THEN 'checkin' ELSE role END")
 
 
-def test_only_holders_read_the_audit_log(app, holders):
+def test_every_organizer_reads_the_audit_log_and_no_one_else(app, holders):
     assert _client(app).get("/api/admin/audit").status_code == 401
-    assert _signed_in(app, "dora").get("/api/admin/audit").status_code == 403   # organizer
     assert _signed_in(app, "bob").get("/api/admin/audit").status_code == 403     # checkin
-    alice = _signed_in(app)
-    assert alice.get("/api/admin/audit").status_code == 200
-    assert alice.get("/api/users/me").json()["audit_access"] is True
-    assert _signed_in(app, "dora").get("/api/users/me").json()["audit_access"] is False
-
-
-def test_taking_access_away_works_at_once(app, holders):
-    alice = _signed_in(app)
-    _sql("UPDATE users SET audit_access = TRUE WHERE user_id = 'u-dora'")
-    dora = _signed_in(app, "dora")
-    assert dora.get("/api/admin/audit").status_code == 200
-    assert alice.post("/api/users/set_audit_access",
-                      data={"user_id": "u-dora", "grant": "0"}).status_code == 200
-    assert dora.get("/api/admin/audit").status_code == 403       # same session, next request
+    assert _signed_in(app, "bob").get("/api/admin/audit/status").status_code == 403
+    assert _signed_in(app).get("/api/admin/audit").status_code == 200
+    assert _signed_in(app, "dora").get("/api/admin/audit").status_code == 200    # no alerts
+    assert _signed_in(app, "dora").get("/api/admin/audit/status").status_code == 200
 
 
 def test_listing_filters_and_pages(app, holders, audit_file):
@@ -660,47 +649,53 @@ def test_opening_the_log_is_itself_audited_once_per_visit(app, holders, audit_fi
     assert len(views) == 1 and views[0]["actor"] == "alice"
 
 
-def test_granting_and_revoking(app, holders, audit_file):
-    alice = _signed_in(app)
-    r = alice.post("/api/users/set_audit_access", data={"user_id": "u-bob", "grant": "1"})
+def test_any_organizer_turns_alerts_on_and_off_for_anyone(app, holders, audit_file):
+    dora = _signed_in(app, "dora")                  # doesn't get alerts herself
+    r = dora.post("/api/users/set_audit_alerts", data={"user_id": "u-bob", "enabled": "1"})
     assert r.status_code == 400 and "organizers" in r.json()["detail"]        # bob is checkin
-    assert _signed_in(app, "dora").post(
-        "/api/users/set_audit_access", data={"user_id": "u-dora", "grant": "1"}
-    ).status_code == 403                                                        # not a holder
-    assert alice.post("/api/users/set_audit_access",
-                      data={"user_id": "u-dora", "grant": "1"}).json()["audit_access"] is True
-    assert alice.post("/api/users/set_audit_access",
-                      data={"user_id": "u-alice", "grant": "0"}).status_code == 200   # dora has it
-    rows = [r for r in _audit_rows() if r["event"] == "user.audit_access"]
-    assert [r["data"]["grant"] for r in rows] == [True, False]
-    assert {u["username"]: u["audit_access"] for u in
-            _signed_in(app, "dora").get("/api/users").json()}["dora"] is True
+    assert _signed_in(app, "bob").post(
+        "/api/users/set_audit_alerts", data={"user_id": "u-bob", "enabled": "0"}
+    ).status_code == 403                                                        # not an organizer
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-dora", "enabled": "1"}).json()["audit_alerts"] is True
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-alice", "enabled": "0"}).status_code == 200
+    rows = [r for r in _audit_rows() if r["event"] == "user.audit_alerts"]
+    assert [r["data"]["enabled"] for r in rows] == [True, False]
+    assert rows[0]["message"] == "Turned security alerts on for themselves"
+    listed = {u["username"]: u["audit_alerts"] for u in dora.get("/api/users").json()}
+    assert listed["dora"] is True and listed["alice"] is False
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-dora", "enabled": "x"}).status_code == 400
 
 
-def test_the_last_holder_cant_be_removed_any_way(app, holders):
+def test_alerts_can_go_to_nobody_and_the_status_says_so(app, holders):
     alice = _signed_in(app)
+    r = alice.post("/api/users/set_audit_alerts", data={"user_id": "u-alice", "enabled": "0"})
+    assert r.status_code == 200                                  # the last one: allowed
+    body = alice.get("/api/admin/audit/status").json()
+    assert body["alerted"] == [] and body["recipients"] == 0
+
+
+def test_someone_who_stops_being_an_organizer_stops_getting_alerts(app, holders):
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE user_id = 'u-dora'")
     dora = _signed_in(app, "dora")
-    r = alice.post("/api/users/set_audit_access", data={"user_id": "u-alice", "grant": "0"})
-    assert r.status_code == 409 and r.json()["detail"].startswith("You are the only one")
-    r = dora.post("/api/users/set_role", data={"user_id": "u-alice", "role": "view"})
-    assert r.status_code == 409 and "only one who can read the audit log" in r.json()["detail"]
-    assert dora.post("/api/users/delete", data={"user_id": "u-alice"}).status_code == 409
-    # Not the last holder: the usual rules.
     assert dora.post("/api/users/set_role",
-                      data={"user_id": "u-bob", "role": "view"}).status_code == 200
-    dora.post("/api/users/set_role", data={"user_id": "u-bob", "role": "checkin"})
+                     data={"user_id": "u-alice", "role": "view"}).status_code == 200
+    assert _sql("SELECT audit_alerts FROM users WHERE user_id = 'u-alice'") == [(False,)]
+    dora.post("/api/users/set_role", data={"user_id": "u-alice", "role": "organizer"})
+    assert _sql("SELECT audit_alerts FROM users WHERE user_id = 'u-alice'") == [(False,)]
 
 
 def test_status_says_who_alerts_reach(app, holders):
-    _sql("UPDATE users SET audit_access = TRUE WHERE user_id = 'u-dora'")
-    body = _signed_in(app).get("/api/admin/audit/status").json()
-    assert body["holders"] == [{"username": "alice", "has_email": True},
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE user_id = 'u-dora'")
+    body = _signed_in(app, "dora").get("/api/admin/audit/status").json()
+    assert body["alerted"] == [{"username": "alice", "has_email": True},
                                {"username": "dora", "has_email": False}]
     assert body["recipients"] == 1 and body["retention_days"] == 365
 
 
 def test_a_test_alert_is_mailed_and_limited(app, holders, sent, monkeypatch, audit_file):
-    import alerts
     calls = []
 
     async def send(kind, to, link, **fields):
@@ -708,12 +703,11 @@ def test_a_test_alert_is_mailed_and_limited(app, holders, sent, monkeypatch, aud
         return {"ok": True}
     monkeypatch.setattr(portal_sync, "send_admin_mail", send)
     monkeypatch.setattr(portal_sync, "site_origin", lambda: SITE)
-    alice = _signed_in(app)
-    r = alice.post("/api/admin/audit/test_alert")
+    dora = _signed_in(app, "dora")                  # any organizer can send one
+    r = dora.post("/api/admin/audit/test_alert")
     assert r.status_code == 200 and r.json() == {"reached": 1, "recipients": 1}
     assert calls == [("alert", "alice@example.com", "test", "Test alert from the audit log page")]
-    r = alice.post("/api/admin/audit/test_alert")
+    r = dora.post("/api/admin/audit/test_alert")
     assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0
     events = [r["event"] for r in _audit_rows()]
     assert "alert.test" in events and "alert.mailed" in events
-    assert alerts  # imported for the module's state; nothing queued for a test alert

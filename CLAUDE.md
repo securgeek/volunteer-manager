@@ -195,11 +195,12 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
   a JSON line in `logs/audit.jsonl` and a row in `audit_events`. Codes come from
   `audit.EVENTS`, which a test enforces.
 - `backend/alerts.py` runs rules over those events and emails alerts through the portal
-  (`send_admin_mail` kind `alert`) to organizers with `users.audit_access` and an email.
+  (`send_admin_mail` kind `alert`) to organizers with `users.audit_alerts` and an email.
   See `backend/CLAUDE.md` → Security alerts; the plan is `plans/audit_alerting.md`.
-- **The Audit Log tab** (`/admin/audit`, where alert emails link) is for organizers with
-  `users.audit_access`, checked in the database on every request. Only a holder can grant
-  it (Users dialog), and the last holder can't be revoked, demoted or deleted.
+- **Admin → Audit Log** (a dialog; `/admin/audit`, where alert emails link, opens it) is for
+  every organizer. Who gets the alert **emails** is separate: `users.audit_alerts`, which any
+  organizer ticks for any organizer in Admin → Users. It may be nobody (alerts are then only
+  recorded, and both dialogs warn).
 - Failed password sign-ins are rate limited (`backend/CLAUDE.md` → Session and auth).
 - `security_signals.py` (the **same file** in `backend/` and `portal/`; a test compares them)
   watches every request for attack patterns, probing and malformed input, and refuses only a
@@ -322,9 +323,9 @@ Frontend wizard state machine: `loading → create_admin → login → import_sc
 | GET  | `passkeys` | any (own) |
 | POST | `passkeys/rename`, `passkeys/delete` | any (own) |
 | POST | `passkeys/clear_user` | organizer |
-| GET  | `admin/audit` (filters, `before_id` paging), `admin/audit/status` | organizer with audit-log access |
-| POST | `admin/audit/test_alert` (one a minute) | organizer with audit-log access |
-| POST | `users/set_audit_access` (`user_id`, `grant`; not the last holder) | organizer with audit-log access |
+| GET  | `admin/audit` (filters, `before_id` paging), `admin/audit/status` | organizer |
+| POST | `admin/audit/test_alert` (one a minute) | organizer |
+| POST | `users/set_audit_alerts` (`user_id`, `enabled`; organizers only) | organizer |
 
 ### Schedule structure
 

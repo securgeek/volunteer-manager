@@ -1,14 +1,14 @@
-"""The Audit Log tab: reading audit_events, alert status, a test alert, and who may.
+"""The Audit Log (Admin → Audit Log): reading audit_events, where alerts go, a test alert.
 
-Only organizers holding `users.audit_access` get anything here (`require_audit_access`, read
-from the database on every request, so revoking or demoting takes effect at once). The first
-holder is the first admin; after that only a holder can grant or revoke it
-(`POST /api/users/set_audit_access`, in routers/users.py), and the last one can't be removed.
+Every organizer may read it. Who gets the alert emails is separate: `users.audit_alerts`,
+which any organizer sets in Admin → Users (`POST /api/users/set_audit_alerts`, in
+routers/users.py). It may be nobody; alerts are then only recorded, and the status here says
+so for the page to show in red.
 
 | Method | Path | |
 |---|---|---|
 | GET  | `/api/admin/audit` | events, newest first, filtered, paged by `before_id` |
-| GET  | `/api/admin/audit/status` | holders, who alerts reach, the last alert and failure |
+| GET  | `/api/admin/audit/status` | who alerts go to, the last alert and failure |
 | POST | `/api/admin/audit/test_alert` | mail a test alert to every recipient now |
 """
 import asyncio
@@ -19,7 +19,7 @@ import alerts
 import audit as audit_mod
 import portal_sync
 from audit import audit
-from db import PgClient, get_db, get_session_data
+from db import PgClient, RoleChecker, get_db
 from ratelimit import SlidingWindow
 
 router = APIRouter()
@@ -29,9 +29,6 @@ PAGE_MAX = 200
 TEST_ALERT_EVERY_SEC = 60
 _test_alerts = SlidingWindow(1, TEST_ALERT_EVERY_SEC)
 
-_HOLDER_SQL = (
-    "SELECT 1 FROM users WHERE user_id = ? AND role = 'organizer' AND audit_access;"
-)
 # Every filter is a bound flag: '' means "not filtering on this". LIKE patterns come from
 # _like(), which escapes the user's % _ and \.
 _EVENTS_SQL = (
@@ -47,36 +44,14 @@ _EVENTS_SQL = (
     "AND (?::bigint IS NULL OR id < ?) "
     "ORDER BY id DESC LIMIT ?;"
 )
-_HOLDERS_SQL = (
+_ALERTED_SQL = (
     "SELECT username, (email IS NOT NULL AND email <> '') AS has_email FROM users "
-    "WHERE audit_access AND role = 'organizer' ORDER BY username;"
+    "WHERE audit_alerts AND role = 'organizer' ORDER BY username;"
 )
 _LAST_EVENT_SQL = (
     "SELECT to_char(ts, 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS ts, message, data "
     "FROM audit_events WHERE event = ? ORDER BY id DESC LIMIT 1;"
 )
-
-
-def require_audit_access(s_data: dict | None = Depends(get_session_data),
-                         db: PgClient = Depends(get_db)) -> dict:
-    """Depends: the caller is signed in, an organizer, and holds audit-log access.
-
-    Args:
-        s_data: The caller's session, or None.
-        db: The request's database connection.
-
-    Returns:
-        The session dict.
-
-    Raises:
-        HTTPException 401: Not signed in.
-        HTTPException 403: Not an organizer holding audit-log access.
-    """
-    if not s_data:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    if not db.execute(_HOLDER_SQL, (s_data["user_id"],)).fetchone():
-        raise HTTPException(status_code=403, detail="This needs audit log access.")
-    return s_data
 
 
 def _like(text: str, prefix_only: bool = False) -> str:
@@ -96,7 +71,7 @@ def list_events(
     q: str = Query(default="", max_length=100, description="Text in the message"),
     before_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=100, ge=1, le=PAGE_MAX),
-    s_data: dict = Depends(require_audit_access),
+    s_data: dict = Depends(RoleChecker("organizer")),
     db: PgClient = Depends(get_db),
 ):
     """Audit events, newest first.
@@ -111,7 +86,7 @@ def list_events(
         q: Only messages containing this (case-insensitive).
         before_id: Only events older than this id (the previous page's `next_before_id`).
         limit: At most this many.
-        s_data: The caller's session; needs audit-log access.
+        s_data: The caller's session; organizers only.
         db: The request's database connection.
 
     Returns:
@@ -140,22 +115,22 @@ def list_events(
 
 
 @router.get("/api/admin/audit/status")
-def alert_status(s_data: dict = Depends(require_audit_access), db: PgClient = Depends(get_db)):
+def alert_status(s_data: dict = Depends(RoleChecker("organizer")), db: PgClient = Depends(get_db)):
     """Where alerts go and whether they're getting there.
 
     Args:
-        s_data: The caller's session; needs audit-log access.
+        s_data: The caller's session; organizers only.
         db: The request's database connection.
 
     Returns:
-        `holders` ({username, has_email}), `recipients` (how many alerts reach),
-        `portal_configured`, `retention_days`, `last_alert` and `last_failure`
-        ({ts, message, data} or None).
+        `alerted` ({username, has_email}: the organizers set to get alerts), `recipients`
+        (how many of them alerts actually reach: those with an address), `portal_configured`,
+        `retention_days`, `last_alert` and `last_failure` ({ts, message, data} or None).
     """
-    holders = db.execute(_HOLDERS_SQL).fetchall()
+    alerted = db.execute(_ALERTED_SQL).fetchall()
     return {
-        "holders": holders,
-        "recipients": sum(1 for h in holders if h["has_email"]),
+        "alerted": alerted,
+        "recipients": sum(1 for h in alerted if h["has_email"]),
         "portal_configured": portal_sync.configured(),
         "retention_days": audit_mod.retention_days(),
         "last_alert": db.execute(_LAST_EVENT_SQL, ("alert.fired",)).fetchone(),
@@ -165,7 +140,7 @@ def alert_status(s_data: dict = Depends(require_audit_access), db: PgClient = De
 
 
 @router.post("/api/admin/audit/test_alert")
-async def test_alert(request: Request, s_data: dict = Depends(require_audit_access)):
+async def test_alert(request: Request, s_data: dict = Depends(RoleChecker("organizer"))):
     """Mail a test alert to everyone alerts go to, now, and say how many it reached.
 
     Goes the whole way a real alert does (portal, relay, inbox), without the retry, and at
@@ -173,7 +148,7 @@ async def test_alert(request: Request, s_data: dict = Depends(require_audit_acce
 
     Args:
         request: The request, for the audit log.
-        s_data: The caller's session; needs audit-log access.
+        s_data: The caller's session; organizers only.
 
     Returns:
         `{"reached": n, "recipients": n}`.

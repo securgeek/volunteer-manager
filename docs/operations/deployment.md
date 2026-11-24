@@ -113,11 +113,11 @@ start. Before and after:
 
 1. **`.env`:** add `PORTAL_STRICT=report` (the default if it's missing) and, if you want a
    retention other than a year, `AUDIT_RETENTION_DAYS` (see [Configuration](configuration.md)).
-2. **Your email in Profile.** Alerts go to organizers with audit-log access and an address.
-   On an upgraded database that's the earliest organizer account; give others access from
-   **Admin → Users**.
-3. **After the restart:** open the **Audit Log** tab and press **Send test alert**. The
-   email should arrive within a minute, and its link should open the tab.
+2. **Who gets alerts.** Alerts are emailed to the organizers ticked under **Security alerts**
+   in **Admin → Users** who have an address in Profile. On an upgraded database that starts
+   as the earliest organizer account; tick others there.
+3. **After the restart:** open **Admin → Audit Log** and press **Send test alert**. The
+   email should arrive within a minute, and its link should open the Audit Log.
 4. **The old log:** `logs/audit.log` stops growing; `logs/audit.jsonl` takes over. Keep or
    archive the old file. Set up rotation for the new one (Backups → Rotating the audit log).
 5. **A few days later:** if the Audit Log shows no `portal.anomaly` events from real

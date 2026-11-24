@@ -292,7 +292,7 @@ built. Each of these points is documented in the CLAUDE.md beside the code it de
   so input that breaks them is an anomaly: recorded and alerted on, and refused once
   `PORTAL_STRICT=enforce`.
 - **Alerts** (`backend/alerts.py`) turn those, and account and key changes, into email to
-  the organizers with audit-log access, at most once an hour per cause. The portal sends
+  the organizers ticked for security alerts, at most once an hour per cause. The portal sends
   them through a fixed template with every detail defanged.
 
 **Runtime**

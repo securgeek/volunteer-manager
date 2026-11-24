@@ -94,21 +94,22 @@ function is_self(user) {
   return user.username === current_username
 }
 
-// ── audit log access ──────────────────────────────────────────────────────────
-// Reading the audit log and getting security alerts (backend routers/audit_log.py). Only
-// someone who has it can give or take it, only organizers can have it, and the last one
-// can't lose it (the server says so if you try).
-const can_grant = computed(() => users.value.some(u => is_self(u) && u.audit_access && u.role === 'organizer'))
+// ── security alerts ───────────────────────────────────────────────────────────
+// Who gets security alert emails (backend alerts.py; every organizer can read the Audit Log
+// regardless). Organizers only, and any organizer can change anyone's. It may be nobody,
+// which the warning above the list says, as the Audit Log does.
+const alerts_reach_nobody = computed(() => users.value.length > 0 &&
+  !users.value.some(u => u.audit_alerts && u.role === 'organizer' && u.email))
 
-async function set_audit_access(user) {
+async function set_audit_alerts(user) {
   err.value = ''
   const fd = new FormData()
   fd.append('user_id', user.user_id)
-  fd.append('grant', user.audit_access ? '1' : '0')
-  const resp = await fetch('/api/users/set_audit_access', { method: 'POST', body: fd })
+  fd.append('enabled', user.audit_alerts ? '1' : '0')
+  const resp = await fetch('/api/users/set_audit_alerts', { method: 'POST', body: fd })
   if (!resp.ok) {
     const body = await resp.json().catch(() => null)
-    err.value = body?.detail || 'Failed to change audit log access.'
+    err.value = body?.detail || 'Failed to change security alerts.'
   }
   load()
 }
@@ -300,6 +301,10 @@ async function add_user() {
     <Message v-if="err" severity="error" :closable="false" style="margin-bottom:0.75rem;">
       {{ err }}
     </Message>
+    <Message v-if="alerts_reach_nobody" severity="warn" :closable="false" style="margin-bottom:0.75rem;">
+      Security alerts aren't emailed to anyone. Tick <strong>Security alerts</strong> for an
+      organizer who has an email address.
+    </Message>
 
     <!-- ── user list ─────────────────────────────────────────────────────────── -->
     <div class="user-list">
@@ -311,7 +316,7 @@ async function add_user() {
         <span>Last login</span>
         <span>Failed logins</span>
         <span>Passkeys</span>
-        <span v-tooltip.top="'Can read the audit log and gets security alerts'">Audit log</span>
+        <span v-tooltip.top="'Gets security alert emails (needs an email address)'">Security alerts</span>
         <span></span>
       </div>
 
@@ -342,12 +347,12 @@ async function add_user() {
           </span>
           <span class="muted center">{{ user.passkey_count || '—' }}</span>
           <span class="center">
-            <Checkbox v-model="user.audit_access" binary
-                      :disabled="!can_grant || (user.role !== 'organizer' && !user.audit_access)"
-                      :aria-label="`Audit log access for ${user.username}`"
-                      v-tooltip.top="!can_grant ? 'Only someone with audit log access can change this'
-                                     : user.role !== 'organizer' ? 'Organizers only' : ''"
-                      @change="set_audit_access(user)" />
+            <Checkbox v-model="user.audit_alerts" binary
+                      :disabled="user.role !== 'organizer' && !user.audit_alerts"
+                      :aria-label="`Security alert emails for ${user.username}`"
+                      v-tooltip.top="user.role !== 'organizer' ? 'Organizers only'
+                                     : user.audit_alerts && !user.email ? 'No email address: alerts can\'t reach them' : ''"
+                      @change="set_audit_alerts(user)" />
           </span>
           <div class="actions">
             <Button size="small" icon="pi pi-key" severity="secondary" variant="text"

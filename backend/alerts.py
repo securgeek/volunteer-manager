@@ -8,8 +8,8 @@ that many *distinct* usernames, for a password spray — inside `window_sec`.
 A fired alert:
 
 * is recorded as an `alert.fired` audit event, with the alert's own severity;
-* is queued for email to everyone who may read the audit log (`users.audit_access`, with an
-  address in `users.email`), through the portal's `send_admin_mail` (kind `alert`), sent by a
+* is queued for email to every organizer set to get alerts (`users.audit_alerts`, Admin →
+  Users) who has an address in `users.email`, through the portal's `send_admin_mail` (kind `alert`), sent by a
   background task so no request waits on mail;
 * starts a **cooldown** for that rule and key (`COOLDOWN_SEC`). Matching events during it are
   only counted. When it ends, the count goes out: with the next alert for the same rule and
@@ -190,7 +190,7 @@ RULES: tuple[Rule, ...] = (
          frozenset({"setup.create_admin.refused"}), _ip_key),
     Rule("account.privilege", "An organizer-site account was created or its role changed",
          "medium", frozenset({"user.create", "user.role_change", "invite.accept",
-                              "user.audit_access"}), _per_event),
+                              "user.audit_alerts"}), _per_event),
     Rule("account.credentials", "An account's password, passkeys or reset address was changed "
          "by someone else", "medium",
          frozenset({"password.reset.by_admin", "passkey.clear_user", "user.email_set",
@@ -370,13 +370,14 @@ def _fire(rule: Rule, key: str, rec: dict, count: int, held_back: int) -> None:
 
 
 _RECIPIENTS_SQL = (
-    "SELECT username, email FROM users WHERE audit_access AND role = 'organizer' "
+    "SELECT username, email FROM users WHERE audit_alerts AND role = 'organizer' "
     "AND email IS NOT NULL AND email <> '' ORDER BY username;"
 )
 
 
 def recipients() -> list:
-    """Who alerts are mailed to: organizers with audit-log access and an email address.
+    """Who alerts are mailed to: organizers set to get them (`users.audit_alerts`, Admin →
+    Users) who have an email address.
 
     Returns:
         A list of {"username", "email"} dicts.
@@ -411,7 +412,7 @@ async def deliver(alert: Alert, retry: bool = True) -> int:
     """
     people = await asyncio.to_thread(recipients)
     if not people:
-        log.warning("alerts: %s not mailed: no organizer with audit access has an email",
+        log.warning("alerts: %s not mailed: no organizer set to get alerts has an email",
                     alert.rule_id)
         audit("alert.mail_fail", None, None, "No one to email the alert to",
               rule=alert.rule_id, reason="no_recipients")
