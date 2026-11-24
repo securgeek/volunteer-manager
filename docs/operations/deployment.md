@@ -104,6 +104,30 @@ each container to podman's 10-second kill.
 6. Upload the organizers' public key (**Admin → Email Key**). Signup can't open without it.
 7. To send mail for real, set up the relay: [Graph mail setup](graph-mail-setup.md).
 
+## Upgrading to 1.1 (audit log and alerts)
+
+1.1 adds the audit log's table, security alerts, request watching and strict input checks on
+the volunteer pages. Ship it the usual way (above): it changes the backend, the portal and
+the frontend's nginx, so rebuild all three, and both databases migrate by themselves on
+start. Before and after:
+
+1. **`.env`:** add `PORTAL_STRICT=report` (the default if it's missing) and, if you want a
+   retention other than a year, `AUDIT_RETENTION_DAYS` (see [Configuration](configuration.md)).
+2. **Your email in Profile.** Alerts go to organizers with audit-log access and an address.
+   On an upgraded database that's the earliest organizer account; give others access from
+   **Admin → Users**.
+3. **After the restart:** open the **Audit Log** tab and press **Send test alert**. The
+   email should arrive within a minute, and its link should open the tab.
+4. **The old log:** `logs/audit.log` stops growing; `logs/audit.jsonl` takes over. Keep or
+   archive the old file. Set up rotation for the new one (Backups → Rotating the audit log).
+5. **A few days later:** if the Audit Log shows no `portal.anomaly` events from real
+   volunteers (filter on *Portal anomalies*), set `PORTAL_STRICT=enforce` and restart the
+   portal.
+
+Rolling back is the 1.0 code on the same databases: neither app refuses a schema newer than
+its own, and 1.1 only adds a table and columns, which 1.0 ignores. Take the usual backup
+before upgrading anyway.
+
 ## Upgrading PostgreSQL
 
 The official image keeps its data in a directory named for the major version, and refuses

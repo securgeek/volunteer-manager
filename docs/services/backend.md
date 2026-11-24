@@ -129,7 +129,7 @@ carrying a NUL character is the one refused, as no browser sends one.
 A fired alert is recorded as `alert.fired` and emailed, through the portal, to organizers
 with audit-log access and an address on their account. Each kind fires at most once an hour
 for the same cause, and at most 15 alerts are mailed an hour in all. The old
-free-text `logs/audit.log` (before this change) is left as it was and no longer written.
+free-text `logs/audit.log` (before release 1.1) is left as it was and no longer written.
 
 Successful healthchecks are left out of the access log, and a healthy, idle backend logs
 nothing. A sync problem is logged once as a warning, and recovery as one

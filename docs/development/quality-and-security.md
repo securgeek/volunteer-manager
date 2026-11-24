@@ -323,6 +323,11 @@ What nothing checks today, roughly in order of value:
 - **Requests nginx answers itself.** On the public hostname, nginx 404s everything outside
   `/`, `/apply/` and `/api/portal/`, so a scanner's tries at `/wp-login.php` or `/.env` reach
   no app and raise no signal. Only nginx's own access log has them.
+- **A session that moves.** Nothing notices a session cookie used from a new network
+  part-way through a session (a stolen cookie). `sessions.ip_addr` holds the real client
+  address since 1.1, so the check can be added; it isn't yet.
+- **Portal strict mode starts in report.** Until `PORTAL_STRICT=enforce`, input the
+  volunteer pages can't send is alerted on but still accepted.
 - **Detection never blocks.** A client that sets off alerts keeps being served until an
   organizer does something about it. That's deliberate (an automatic block can lock an
   organizer out on event day), but it means the alerts are the defence, not a wall.
@@ -330,8 +335,8 @@ What nothing checks today, roughly in order of value:
 - **Tooling code.** `docs/` and `lint/` aren't in `run_lint.sh`'s app list. The plugin is
   tested, but neither directory is linted.
 - **Postgres-only tests** skip unless `TEST_PG_HOST` is set, so `./run_tests.sh` alone
-  doesn't run them. That's 128 of the backend's 163 tests, including every export, invite,
-  passkey, CSV import and migration test. backend/CLAUDE.md → Tests explains how to start a throwaway Postgres
+  doesn't run them. That's 205 of the backend's 376 tests (as of November 2026), including
+  every export, invite, passkey, CSV import, migration, audit-table and Audit Log test. backend/CLAUDE.md → Tests explains how to start a throwaway Postgres
   for them.
 - **Broad catches that re-raise.** pylint's `broad-exception-caught` ignores a handler that
   raises, so two are unflagged:
