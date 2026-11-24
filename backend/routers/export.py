@@ -36,7 +36,7 @@ class ExportHeader(BaseModel):
     generated_at: str = Field(description="Server time of the response, ISO-8601 UTC.",
                               examples=["2027-04-20T14:03:11.402Z"])
     event_title: str = Field(description="The event's title from App Settings.",
-                             examples=["BSides Charm 2027"])
+                             examples=["BSidesCharm 2027"])
     event_tz: str = Field(description="IANA timezone that `start` and `end` are given in.",
                           examples=["America/New_York"])
 

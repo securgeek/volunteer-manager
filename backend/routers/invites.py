@@ -22,7 +22,8 @@ from argon2 import PasswordHasher
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import portal_sync
-from db import PgClient, RoleChecker, audit, get_app_kv, get_db
+from audit import audit
+from db import PgClient, RoleChecker, get_app_kv, get_db
 from routers.auth import start_session
 
 router = APIRouter()
@@ -112,7 +113,8 @@ async def create_invite(
     ).fetchone()
     db.commit()
     link = f"{site}/admin/invite?t={token}"
-    audit(request, request.session.get("session_id"), f"Created a {role} invite {invite_id}")
+    audit("invite.create", request, request.session.get("session_id"),
+          f"Created a {role} invite {invite_id}")
 
     out = {"invite_id": invite_id, "link": link, "expires_at": _iso(row["expires_at"]),
            "emailed": False}
@@ -182,7 +184,8 @@ def revoke_invite(
     db.commit()
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="No outstanding invite with that id")
-    audit(request, request.session.get("session_id"), f"Revoked invite {invite_id}")
+    audit("invite.revoke", request, request.session.get("session_id"),
+          f"Revoked invite {invite_id}")
     return {"ok": True}
 
 
@@ -264,6 +267,7 @@ def accept_invite(
     # start_session commits, so the consume, the new user and the session land together.
     result = start_session(request, db, {"user_id": user_id, "username": username,
                                          "role": invite["role"]})
-    audit(request, request.session.get("session_id"),
-          f"Accepted invite {invite['invite_id']} as {invite['role']}")
+    audit("invite.accept", request, request.session.get("session_id"),
+          f"Accepted invite {invite['invite_id']} as {invite['role']}",
+          invite_id=invite["invite_id"], role=invite["role"])
     return result

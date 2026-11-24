@@ -18,7 +18,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import Response
 
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 from routers.events import broadcast
 
 router = APIRouter()
@@ -516,7 +517,8 @@ def assign_vol(
     )
     db.commit()
     broadcast("assignment")
-    audit(request, request.session.get("session_id"), f"Assigned {vol_id} to {pos_key}.")
+    audit("schedule.assign", request, request.session.get("session_id"),
+          f"Assigned {vol_id} to {pos_key}.")
     return {"schedule": _build_schedule(db)}
 
 
@@ -548,7 +550,8 @@ def clear_timeslot(
     )
     db.commit()
     broadcast("assignment")
-    audit(request, request.session.get("session_id"), f"Cleared timeslot {pos_key}.")
+    audit("schedule.clear", request, request.session.get("session_id"),
+          f"Cleared timeslot {pos_key}.")
     return {"schedule": _build_schedule(db)}
 
 
@@ -618,13 +621,15 @@ def set_schedule_note(
             "note = excluded.note, username = excluded.username, updated_at = excluded.updated_at;",
             (day_key, time_key, p_key, note, s_data["username"])
         )
-        audit(request, request.session.get("session_id"), f"Set note on slot {day_key}/{time_key}/{p_key}: {note!r}")
+        audit("schedule.note", request, request.session.get("session_id"),
+              f"Set note on slot {day_key}/{time_key}/{p_key}: {note!r}")
     else:
         db.execute(
             "DELETE FROM schedule_notes WHERE day_key = ? AND time_key = ? AND pos_key = ?;",
             (day_key, time_key, p_key)
         )
-        audit(request, request.session.get("session_id"), f"Cleared note on slot {day_key}/{time_key}/{p_key}.")
+        audit("schedule.note", request, request.session.get("session_id"),
+              f"Cleared note on slot {day_key}/{time_key}/{p_key}.")
     db.commit()
     broadcast("note")
     return Response(status_code=204)
@@ -729,7 +734,7 @@ def upsert_day(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Upserted day {day_key!r} ({day_str}), {len(times)} time(s), {slots_created} slot(s)")
     return {"ok": True, "slots_created": slots_created}
 
@@ -766,7 +771,8 @@ def delete_day(
     db.execute("DELETE FROM days_table WHERE day_key = ?;", (day_key,))
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Deleted day {day_key!r}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Deleted day {day_key!r}")
     return {"ok": True}
 
 
@@ -840,7 +846,7 @@ def upsert_time(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Upserted time {time_key!r} ({time_str}), {len(days)} day(s), {slots_created} slot(s)")
     return {"ok": True, "slots_created": slots_created}
 
@@ -902,7 +908,7 @@ def set_day_time(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"{'Added' if enabled else 'Removed'} time {time_key} "
           f"{'to' if enabled else 'from'} day {day_key} ({slots_removed} slot(s) removed)")
     return {"ok": True, "slots_removed": slots_removed}
@@ -940,7 +946,8 @@ def delete_time(
     db.execute("DELETE FROM times_table WHERE time_key = ?;", (time_key,))
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Deleted time {time_key!r}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Deleted time {time_key!r}")
     return {"ok": True}
 
 
@@ -990,7 +997,7 @@ def upsert_position(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Upserted position {pos_key!r} ({pos_cat}/{pos_str}), {slots_created} slot(s)")
     return {"ok": True, "slots_created": slots_created}
 
@@ -1026,7 +1033,8 @@ def delete_position(
     db.execute("DELETE FROM positions WHERE pos_key = ?;", (pos_key,))
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Deleted position {pos_key!r}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Deleted position {pos_key!r}")
     return {"ok": True}
 
 
@@ -1073,7 +1081,8 @@ def add_schedule_slot(
     )
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Added slot {day_key}_{time_key}_{pos_key}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Added slot {day_key}_{time_key}_{pos_key}")
     return {"ok": True}
 
 
@@ -1154,7 +1163,7 @@ def bulk_add_slots(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Bulk added {positions_created} positions and {slots_created} slots "
           f"({cat}, prefix={prefix}, {start}–{start + count - 1}, {len(pairs)} day/time pair(s))")
     return {"positions_created": positions_created, "slots_created": slots_created}
@@ -1205,7 +1214,8 @@ def remove_schedule_slot(
     )
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Removed slot {day_key}_{time_key}_{pos_key}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Removed slot {day_key}_{time_key}_{pos_key}")
     return {"ok": True}
 
 
@@ -1260,7 +1270,7 @@ def upsert_category(
         )
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Upserted category {cat_name!r}" + (f" with color {color}" if color else ""))
     return {"ok": True}
 
@@ -1292,7 +1302,8 @@ def delete_category(
     db.execute("DELETE FROM categories WHERE cat_name = ?;", (cat_name,))
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Deleted category {cat_name!r}")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Deleted category {cat_name!r}")
     return {"ok": True}
 
 
@@ -1323,7 +1334,8 @@ def reorder_categories(
         db.execute("UPDATE categories SET sort_order = ? WHERE cat_name = ?;", (i, name))
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"), f"Reordered {len(names)} categories")
+    audit("schedule.structure", request, request.session.get("session_id"),
+          f"Reordered {len(names)} categories")
     return {"ok": True}
 
 
@@ -1538,7 +1550,7 @@ def build_schedule_structure(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Built schedule: {len(day_keys)} day(s), {len(time_keys)} time(s), "
           f"{len(cats)} categor(ies), {positions_created} position(s), {slots_created} slot(s)")
     return {
@@ -1822,7 +1834,7 @@ def apply_grid(
 
     db.commit()
     broadcast("schedule")
-    audit(request, request.session.get("session_id"),
+    audit("schedule.structure", request, request.session.get("session_id"),
           f"Applied grid: +{slots_created}/-{slots_removed} slot(s), "
           f"+{positions_created}/-{positions_deleted} position(s), {len(blocked)} blocked")
     return {

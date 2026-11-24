@@ -30,6 +30,7 @@ src/
 ├── lib/colors.js        ← Category chip colors: norm_color / text_on / CAT_FALLBACK
 ├── lib/passkey.js       ← Organizer passkeys: passkey_sign_in / passkey_register (lazy WebAuthn lib)
 ├── lib/checkin_timing.js← Words for a check-in's early/late result, shared by both check-in UIs
+├── lib/portal_rules.js  ← The portal's input rules, checked before sending (portal/validation.py's twin)
 └── components/
     ├── ScheduleView.vue     ← Day tabs (horizontal) + time sidebar (vertical) + Timeslot grid
     ├── Timeslot.vue         ← Single position chip; category color in, glows green (checked-in) / pulses red (past+empty)
@@ -41,7 +42,8 @@ src/
     ├── VolunteerCheckin.vue ← Inline (Schedule tab): scan schedule-email codes; early/late confirm
     ├── EmailTemplate.vue    ← Call for Volunteers → Schedule Email: Markdown, images, live preview, package
     ├── ApiTokens.vue        ← Admin → API Keys: create (shown once), list, revoke
-    ├── UserManager.vue      ← List/add/role/password/email/delete users, clear passkeys, invites (organizer-only)
+    ├── UserManager.vue      ← List/add/role/password/email/delete users, clear passkeys, invites, security alerts (organizer-only)
+    ├── AuditLog.vue         ← Admin → Audit Log: where alerts go (+ Send test alert), the log filtered and paged
     ├── PortalLayout.vue     ← Volunteer pages' frame: logo header, title band, footer (Landing, ApplyShell)
     ├── ShiftPicker.vue      ← The two-shifts-plus-extras picker, shared by signup and ApplyMe editing
     ├── ShiftFlags.vue       ← Banner over the schedule: shifts needing a replacement (Open), and dropped shifts (Unassign / Keep)
@@ -93,6 +95,7 @@ unknown path to the SPA, and `router.js` decides:
 | `/admin` | `Admin.vue` — the organizer app, unchanged | `/api/*` |
 | `/admin/invite?t=` | `AcceptInvite.vue` — username, password, optional email; signs in | `invites/check`, `invites/accept` |
 | `/admin/reset?t=` | `ResetPassword.vue` — new password; then sign in fresh | `password_reset/check`, `password_reset/complete` |
+| `/admin/audit` | `Admin.vue` with **Admin → Audit Log** open (an **alias** of `/admin`, so opening and closing it doesn't remount the app); alert emails link here | `/api/admin/audit*` |
 
 - **`/admin` must stay lazy.** It carries the editors and the ZXing loader; the landing page is
   the only view in the main bundle, so a volunteer on conference wifi never downloads them.
@@ -347,6 +350,28 @@ which callers swallow rather than show. The passkey list shows each one's passke
 tell what a given authenticator actually made. The name field is optional and starts empty:
 the server names a blank one after the passkey manager. Rename is inline, one row at a time.
 
+## Input rules (`lib/portal_rules.js`)
+
+The volunteer pages check names, handles, emails, free-text answers and link tokens by the
+**portal's own rules** before sending anything (`portal/CLAUDE.md` → Strict input
+validation): `problem(kind, value, {label, max})` gives the words to show, or `''`. Anything
+that reaches the portal breaking a rule is recorded as an anomaly and alerted on, so a page
+that sends something the rules refuse would page the organizers.
+
+- **Fields show their problem** after the first blur or a Next/Submit, and Next/Continue stay
+  disabled while there is one (`ApplySignup` step 1 and email step, `ApplyLogin`).
+- **Payloads list their keys.** `ApplySignup` builds `signup` from `names_payload()` and
+  `signup_answers(fields, draft.answers)`, never `{...draft}`: the draft comes back from
+  localStorage and can carry keys an older page saved, answers to removed questions, or a
+  choice no longer offered.
+- **A malformed link is caught here**: `ApplyVerify` says "this link looks damaged" instead
+  of posting a token that fails `TOKEN`; `ApplySignup` treats such an `?invite=` as unknown
+  and never sends it.
+- `portal/test_data/validation_cases.json` is the shared list; `node --test
+  src/lib/portal_rules.test.js` (from `frontend/`, no packages) runs it, and so does
+  `run_lint.sh`. Lengths count code points, like Python. Write invisible characters with
+  `String.fromCodePoint`, never as literals.
+
 ## Signup (`views/apply/ApplySignup.vue`)
 
 The questions are **not** in this file: they come from `GET /api/portal/signup/fields`
@@ -416,8 +441,8 @@ proxies `/api` to `backend:5000` (and `/api/portal` to `portal:5001`, the same w
 `portal/CLAUDE.md`, auth invariant 3). nginx resolves the real client with the realip module
 from the **edge's client-IP header** (named in `default.conf`), which the edge sets and
 overwrites, and forwards a single `$remote_addr` value instead of a chain. Not
-`X-Forwarded-For`: the edge appends to that one and keeps whatever prefix the client sent. `audit()` in `backend/db.py` reads the leftmost
-entry, which is that one trusted value.
+`X-Forwarded-For`: the edge appends to that one and keeps whatever prefix the client sent. `client_ip()` in `backend/audit.py` (the audit log and
+every rate limit) reads the leftmost entry, which is that one trusted value.
 
 Keep the trusted sources in `default.conf` to loopback and the container networks — wherever
 the tunnel client's connection appears from after podman's port forward. Only the host and the
@@ -445,7 +470,7 @@ Never mutate props. Spread-copy into a local `ref`: `const local = ref({ ...prop
 | Toolbar menu | Items | Roles |
 |---|---|---|
 | Call for Volunteers | Volunteer Portal, Shift Demand, Schedule Email | organizer |
-| Admin | Users, App Settings, Email Key, API Keys | organizer |
+| Admin | Users, App Settings, Email Key, API Keys, Audit Log | organizer |
 | *username* (right) | Profile, Sign Out | all |
 
 | Tab | Content | Roles |
@@ -471,7 +496,20 @@ go). Resetting someone else's password, or setting their email, is still UserMan
 
 **Sign-in** (`setup/Login.vue`) has **Forgot password?**, which posts a username to
 `password_reset/request` and shows the server's reply as given: it's the same whether or not
-the account exists or has an email, so the page must not add its own "not found".
+the account exists or has an email, so the page must not add its own "not found". A 429
+from `/api/login` (too many failed sign-ins, `backend/CLAUDE.md` → Session and auth) shows
+its own message with the `Retry-After` wait in minutes, not "Invalid username or password",
+which would only prompt more attempts.
+
+**Admin → Audit Log** (`AuditLog.vue`, a dialog with `open()`) is for every organizer.
+`/admin/audit` (an alias of `/admin`) opens it once the app has loaded, a non-organizer is
+sent to `/admin` instead, and the address follows the dialog open and closed (`open_audit`,
+`on_audit_closed` in Admin.vue). Everything in it came from the log, and parts were typed by
+whoever sent a request, so it's interpolated only, never `v-html`; a row's `data` is shown as
+`JSON.stringify` text. **Users** has a **Security alerts** column: who gets the alert emails,
+any organizer for any organizer, with a warning above the list when that's nobody with an
+address. The saved tab (`bsc_admin_tab`) falls back to Schedule if it names a tab that no
+longer exists (an earlier build had an Audit Log tab).
 
 **Users → Invite Someone** (`UserManager.vue`) creates an invite for a role and an optional
 address. The link is shown once with Copy (the server keeps only its hash) and says whether

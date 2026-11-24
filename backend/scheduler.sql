@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- WebAuthn user handle; random, set on first passkey registration (v9).
     webauthn_user_id  BYTEA,
     -- For password reset only; sign-in is by username (v15).
-    email             TEXT
+    email             TEXT,
+    -- Gets security alerts by email (1.1, alerts.py). Organizers only; any organizer can
+    -- change it. The first admin gets it at setup (routers/setup.py).
+    audit_alerts      BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_webauthn_user_id
     ON users (webauthn_user_id) WHERE webauthn_user_id IS NOT NULL;
@@ -304,5 +307,31 @@ CREATE TABLE IF NOT EXISTS email_assets (
     uploaded_by   TEXT NOT NULL,
     uploaded_at   TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+
+-- The audit log, queryable (audit.py). Every audit() call writes a line to logs/audit.jsonl
+-- and a row here, on its own connection, so a request that rolls back still leaves its row.
+-- The file is the full record; this table is pruned to AUDIT_RETENTION_DAYS. ts is UTC.
+-- user_id has no foreign key on purpose: a deleted user's history must survive them.
+-- source is 'backend', or 'portal' for events pulled from the portal.
+CREATE TABLE IF NOT EXISTS audit_events (
+    id        BIGSERIAL PRIMARY KEY,
+    ts        TIMESTAMP NOT NULL,
+    source    TEXT NOT NULL DEFAULT 'backend',
+    event     TEXT NOT NULL,
+    severity  TEXT NOT NULL CHECK (severity IN ('info', 'low', 'medium', 'high', 'critical')),
+    actor     TEXT,
+    user_id   TEXT,
+    ip        TEXT,
+    method    TEXT,
+    path      TEXT,
+    message   TEXT NOT NULL,
+    data      JSONB NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS audit_events_ts ON audit_events (ts);
+CREATE INDEX IF NOT EXISTS audit_events_event_ts ON audit_events (event, ts);
+
+-- Marks the one-time seeding of users.audit_alerts as done, so migrations/1.1.sql (re-run
+-- while 1.1 is in progress) doesn't tick anyone on a fresh install.
+INSERT INTO app_kv (app_key, val) VALUES ('audit_alerts_seeded', '1') ON CONFLICT DO NOTHING;
 
 COMMIT;

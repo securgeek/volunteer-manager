@@ -104,6 +104,30 @@ each container to podman's 10-second kill.
 6. Upload the organizers' public key (**Admin → Email Key**). Signup can't open without it.
 7. To send mail for real, set up the relay: [Graph mail setup](graph-mail-setup.md).
 
+## Upgrading to 1.1 (audit log and alerts)
+
+1.1 adds the audit log's table, security alerts, request watching and strict input checks on
+the volunteer pages. Ship it the usual way (above): it changes the backend, the portal and
+the frontend's nginx, so rebuild all three, and both databases migrate by themselves on
+start. Before and after:
+
+1. **`.env`:** add `PORTAL_STRICT=report` (the default if it's missing) and, if you want a
+   retention other than a year, `AUDIT_RETENTION_DAYS` (see [Configuration](configuration.md)).
+2. **Who gets alerts.** Alerts are emailed to the organizers ticked under **Security alerts**
+   in **Admin → Users** who have an address in Profile. On an upgraded database that starts
+   as the earliest organizer account; tick others there.
+3. **After the restart:** open **Admin → Audit Log** and press **Send test alert**. The
+   email should arrive within a minute, and its link should open the Audit Log.
+4. **The old log:** `logs/audit.log` stops growing; `logs/audit.jsonl` takes over. Keep or
+   archive the old file. Set up rotation for the new one (Backups → Rotating the audit log).
+5. **A few days later:** if the Audit Log shows no `portal.anomaly` events from real
+   volunteers (filter on *Portal anomalies*), set `PORTAL_STRICT=enforce` and restart the
+   portal.
+
+Rolling back is the 1.0 code on the same databases: neither app refuses a schema newer than
+its own, and 1.1 only adds a table and columns, which 1.0 ignores. Take the usual backup
+before upgrading anyway.
+
 ## Upgrading PostgreSQL
 
 The official image keeps its data in a directory named for the major version, and refuses
@@ -139,9 +163,32 @@ touched. Once the new version has settled, `podman volume rm` the old volume and
 | Scheduler database | `pgdata18` volume | `podman exec scheduler_postgres_1 pg_dump -U scheduler -Fc scheduler > backup.dump` |
 | Portal database | `portal_data` volume, `/data/portal.db` | `sqlite3 /data/portal.db ".backup '/data/backups/portal-$(date +%F-%H%M).db'"` inside the container. Never `cp`: with WAL, a copied file can be torn. |
 | Relay sign-in | `mailrelay_state` volume | Don't back it up. Run `relay.py login` again instead. |
-| Audit log | `logs/audit.log` (bind mount) | an ordinary file |
+| Audit log | `logs/audit.jsonl` (bind mount; `audit.log` before the JSON log) | an ordinary file |
 | `.env` and `private.pem` | your machine | keep them in a password manager. See [Secrets](secrets.md). |
 
 Both database dumps hold volunteer names and email ciphertext. Keep them owner-only
 (`chmod 600`), and don't leave them in `~/Scheduler`, where an rsync with `--delete` would
 remove them.
+
+### Rotating the audit log
+
+`logs/audit.jsonl` grows for as long as the site runs; the backend never trims it (the
+`audit_events` table, which the admin site reads, is pruned separately by
+`AUDIT_RETENTION_DAYS`). The backend opens the file for each line it writes, so an ordinary
+rename-based rotation is safe, with no restart and no `copytruncate`. For example, in
+`/etc/logrotate.d/bsides` (or a user crontab running `logrotate` with its own state file):
+
+```
+/home/<user>/Scheduler/logs/audit.jsonl {
+    monthly
+    rotate 24
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640
+}
+```
+
+Use the owner `ls -ln logs/audit.jsonl` shows: the container's `:U` mount maps it to the
+backend's uid.

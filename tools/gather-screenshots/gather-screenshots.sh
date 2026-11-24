@@ -9,7 +9,7 @@
 # (bsides-demo) on its own ports, with its own generated .env. It never reads this checkout's
 # .env and never touches its volumes, logs/ or ports. Images land in docs/images/screenshots/.
 #
-# Needs: podman + podman-compose, rsync, openssl, node 18+ and npm, and Chromium or Chrome
+# Needs: podman + podman-compose, rsync, openssl, node 22.12+ and npm, and Chromium or Chrome
 # (CHROME=/path/to/chrome if it isn't found). See README.md beside this script.
 set -euo pipefail
 
@@ -52,6 +52,10 @@ fi
 for cmd in podman podman-compose rsync openssl curl node npm; do
   command -v "$cmd" >/dev/null || { echo "missing: $cmd" >&2; exit 1; }
 done
+# puppeteer-core 25 needs Node 22.12 or later (package.json engines).
+node -e 'const [a, b] = process.versions.node.split(".").map(Number);
+         process.exit(a > 22 || (a === 22 && b >= 12) ? 0 : 1)' \
+  || { echo "node $(node -v) is too old: puppeteer-core needs 22.12 or later" >&2; exit 1; }
 if podman ps -a --format '{{.Names}}' | grep -q "^${PROJECT}_"; then
   echo "containers for $PROJECT already exist; run with --down first" >&2
   exit 1
@@ -100,7 +104,10 @@ done
 curl -fsS "http://localhost:$ADMIN_PORT/api/health" >/dev/null || { echo " timed out" >&2; exit 1; }
 
 # ── 4. seed and shoot ────────────────────────────────────────────────────────
-(cd "$HERE" && { [[ -d node_modules ]] || npm ci --no-audit --no-fund; })
+# Install, or reinstall when package-lock.json has changed since the last install: npm writes
+# node_modules/.package-lock.json on every install, so a newer lock means a dependency moved.
+(cd "$HERE" && { [[ node_modules/.package-lock.json -nt package-lock.json ]] \
+                 || npm ci --no-audit --no-fund; })
 mkdir -p "$OUT"
 node "$HERE/shoot.mjs" \
   --admin "http://localhost:$ADMIN_PORT" \

@@ -5,7 +5,11 @@
 ```
 backend/
 ├── main.py          ← App factory, CLI entry point, /api/health
-├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker, audit
+├── db.py            ← Shared: dict_factory, get_db, get_session_data, RoleChecker
+├── audit.py         ← The audit log: audit(), the EVENTS registry, client_ip
+├── ratelimit.py     ← SlidingWindow: in-memory per-key limits (sign-in, password reset)
+├── alerts.py        ← Security alert rules over audit events; mailed through the portal
+├── security_signals.py ← Request-watching middleware (identical copy in portal/)
 ├── checkin_codes.py ← Shift check-in codes (HMAC) and the early/late rule; no DB
 ├── api_auth.py      ← Export API keys: TokenChecker(scope), IP allow-lists, failure limiter
 ├── names.py         ← split_name / export_name ("Handle [First L.]")
@@ -24,6 +28,7 @@ backend/
 │   ├── api_tokens.py← Admin → API Keys: create (shown once), list, revoke
 │   ├── export.py    ← GET export/schedule, export/volunteers (bearer keys); volunteer_records
 │   ├── email_template.py ← Schedule email template, images, preview, package download
+│   ├── audit_log.py ← Admin → Audit Log's API: events, alert status, test alert
 │   └── setup.py     ← Setup wizard endpoints (status, create_admin, CSV imports)
 ├── scheduler.sql    ← Full current schema, for a fresh DB
 ├── migrations/      ← One file per release after 1.0 (SCHEMA_RELEASES in db.py)
@@ -42,10 +47,152 @@ the browser while working fine when called directly. It's a plain string prefix:
 ## Session and auth
 
 - `_session_cache` in `db.py` is a module-level dict keyed by `session_id`. All routers import the same object by reference, so mutations are immediately visible everywhere.
-- `audit_log` is `None` by default. The `__main__` block sets it via `_db.audit_log = args.audit` before starting uvicorn; `audit()` reads it from its own module globals at call time.
+- **The audit log is `audit.py`.** `audit("event.code", request, s_id, message, who=None,
+  **data)` appends one JSON object per line to `logs/audit.jsonl` (`--audit`, set through
+  `audit.configure()` in `main.py`; unset, as in tests, it writes nothing). Fields: `ts` (UTC,
+  `Z`), `event`, `severity`, `actor`, `user_id`, `ip`, `method`, `path`, `message`, `data`.
+  - The **event code comes first and is a string literal from `audit.EVENTS`**, which gives
+    each code a severity. `test_audit.py` scans every call and fails on an unregistered or
+    non-literal code. A new kind of action needs a new registry entry.
+  - Put caller-controlled values (usernames, labels, ids) in `**data`, not only in the
+    message, so they can be filtered on. Never an email address, password or token.
+  - Lines are `json.dumps(..., ensure_ascii=True)`, so no input can forge a line: newlines,
+    U+2028/U+2029/U+0085 and bidi overrides all come out as escapes. That was the bug in
+    the old free-text `audit.log`, which wrote a failed login's username verbatim.
+  - **Each event is also a row in `audit_events`** (1.1 migration) when configured with
+    `to_db=True`, which only `main.py` does. Written by `_store` on its **own pooled
+    connection with its own commit** (`db.get_conn`/`put_conn`), so a request that rolls
+    back still leaves its row. The file is written first and is the complete record; the
+    table is pruned to `AUDIT_RETENTION_DAYS` (default 365, 0 = keep) by `audit.prune()`,
+    which `main.lifespan` runs at startup and every 24 h. `source` is `backend`, or
+    `portal` for portal events pulled in later. NUL can't go into Postgres TEXT/JSONB, so
+    the row has U+FFFD where the file has `\u0000`.
+  - **A NUL in any query parameter makes psycopg2 raise** (a 500). `security_signals`
+    answers any request carrying one with a 400 before a route sees it; `/api/login` also
+    treats such a username as unknown, for callers that bypass the middleware (tests).
+  - A write failure is logged and swallowed; auditing never fails a request.
+  - `client_ip()` lives here (not in `api_auth`, which re-exports it) so `audit.py` imports
+    only `db` and nothing imports in a circle.
 - `RoleChecker("organizer")` as a Depends raises 401 if unauthenticated, 403 if wrong role.
+- **Failed password sign-ins are rate limited** (`routers/auth.py`, `LOGIN_LIMITS`, 15-minute
+  sliding windows in memory, `ratelimit.SlidingWindow`): 5 per username from one address, 20
+  per address, 30 per username from anywhere. Checked **before** the password, so a refused
+  request (429 with `Retry-After`) never tests one, and it doesn't count. Only failures
+  count, because every check-in laptop at the venue shares one public address; a success
+  clears its username-and-address count. The per-username-only limit is deliberately high:
+  set low, anyone who knows a username could lock its owner out from anywhere. A throttled
+  client is audited once per key per window (`auth.login.throttled`), not per request.
+  `reset_login_limits()` clears it all; `conftest.py` does so before every test, since all
+  test clients share one address.
+- **`sessions.ip_addr` is the client's address** (`audit.client_ip`). Before 1.1 it stored
+  `request.client.host`, which behind nginx is always nginx's container address.
+- **An unknown username is verified against a dummy Argon2 hash**, so it takes as long as a
+  wrong password and response time doesn't reveal which usernames exist.
 - `auth.start_session()` is the one place a session is created. The password login and the
   passkey login both call it, so the two produce identical sessions.
+
+## Security alerts (`alerts.py`)
+
+`alerts.observe` sees every audit record (registered with `audit.add_observer` by
+`alerts.start()` in `main.lifespan`, only when the audit table is on; tests call `observe`
+directly or add the observer themselves). `RULES` is the whole list:
+
+| Rule | Fires on | Severity |
+|---|---|---|
+| `login.bruteforce.ip` | 10 `auth.login.fail` from one address (`rate_key`) in 15 min | high |
+| `login.bruteforce.user` | 5 wrong passwords for one username, any address, in 15 min | high |
+| `login.spray` | failures for 5 distinct usernames from one address in 15 min | high |
+| `login.new_network` | a sign-in from a /24 (/64) the user hasn't used in 30 days, if they have history | low |
+| `setup.create_admin` / `setup.after_complete` | the first admin made; setup called again later | high / medium |
+| `account.privilege` | `user.create`, `user.role_change`, `invite.accept` | medium |
+| `account.credentials` | another user's password, passkeys or reset address changed; a user deleted | medium |
+| `account.reset` | `password.reset.complete` | medium |
+| `email_key.change` | `email_key.update` (where volunteer addresses are encrypted to) | high |
+| `api_key.create` / `api_key.refused` / `api_key.new_network` | a key made; 5 refusals from one address in 10 min; a key used from a new network | medium / medium / low |
+| `volunteer.bulk_purge` | 5 purges by one organizer in 10 min | medium |
+| `checkin.key_rotate` | the check-in key rotated | low |
+| `security.attack` / `security.suspicious` / `security.sync_auth` | request signals (below), by address | high / high / critical |
+| `portal.anomaly` | input the volunteer pages can't send (`portal/validation.py`), by address | medium |
+| `severity.high` | any high/critical event no rule above watches (future-proofing) | high |
+
+- **Cooldown**: a rule and key fire at most once per `COOLDOWN_SEC` (1 h); matching events in
+  between are counted, and the next alert carries `held_back`. If no next alert comes,
+  `flush_held_back` (every `FLUSH_EVERY_SEC`, 10 min) sends the count as a "(continued)"
+  follow-up once the cooldown ends, and starts another, so no count is lost and a flood
+  that keeps going is one summary an hour. Plus `MAX_MAILED_PER_HOUR`
+  (15) mailed alerts in all; over it they're recorded with `mailed: false`.
+- **A fired alert** is an `alert.fired` audit event at the alert's severity (`audit(...,
+  severity=…)`, request `None`), then queued. The worker (`deliver`) mails each recipient
+  through `portal_sync.send_admin_mail("alert", …)`, retrying once after 60 s, and records
+  `alert.mailed` (a count) or `alert.mail_fail` (by username, never address). Rules ignore
+  `alert.*`, so nothing loops.
+- **Recipients** are `users` with `audit_alerts`, role organizer and an `email`
+  (`recipients()`). `audit_alerts` (1.1) is ticked once on the earliest organizer by the
+  migration (an `app_kv` marker, `audit_alerts_seeded`, stops a re-run ticking anyone
+  again) and on the first admin at setup; after that any organizer sets it
+  (`POST /api/users/set_audit_alerts`). It may be nobody.
+- **Facts** in the mail: event, time, client address, signed-in user, request, the count, and
+  the event's `data` minus any key containing "email". The portal defangs them again
+  (`portal/CLAUDE.md` → Admin mail).
+- The two "new network" rules read `audit_events` (so they need the table, and stay quiet
+  with no history, so turning alerts on isn't a burst of mail) and remember known
+  (who, network) pairs in memory.
+- `_monotonic` and `ratelimit._monotonic` are the clocks tests move. Never monkeypatch
+  `time.monotonic` itself: asyncio's loop runs on it, and a frozen one hangs `asyncio.sleep`.
+- State is in memory (one worker); `alerts.reset()` clears it, and `conftest.py` does before
+  every test.
+
+## The Audit Log (`routers/audit_log.py`)
+
+Admin → Audit Log in the organizer app. **Every organizer** may read it
+(`RoleChecker("organizer")`); check-in and view-only users can't.
+
+**Who gets alert emails** is a separate per-user flag, `users.audit_alerts` (Admin → Users,
+"Security alerts"): organizers only, set for anyone by any organizer
+(`POST /api/users/set_audit_alerts`, audited as `user.audit_alerts`, which itself alerts), and
+cleared in the same statement when `set_role` makes someone a non-organizer. It may be nobody:
+`/status` then reports `recipients: 0`, and the Audit Log and Users dialogs warn in red. (An
+earlier 1.1 build had `audit_access`, which gated reading too, with a last-holder guard; the
+1.1 migration drops it.)
+
+`GET /api/admin/audit` pages newest first by `before_id` (stable while rows arrive), with
+filters as bound `(? = '' OR …)` flags in one literal statement; LIKE input is escaped by
+`_like`, so `%` and `_` are literal. The first page of a visit is audited as `audit.view`.
+`/status` lists who is set to get alerts and whether each has an email (alerts reach those
+who do), and the last `alert.fired` / `alert.mail_fail`. `/test_alert` sends a real alert
+(rule `test`) through `alerts.deliver(retry=False)`, once a minute. `GET /api/users` carries
+`audit_alerts` for the Users column.
+
+## Request signals (`security_signals.py`)
+
+An ASGI middleware, `main.py` adds it (inside `SessionMiddleware`, so a finding names the
+signed-in user). **The same file is in `portal/`**; `test_security_signals.py` fails if the
+two differ, so edit one and copy it. Each app passes what differs: `client_ip` (here
+`audit.client_ip`, leftmost; the portal's `auth.client_ip`, rightmost), `report`, the
+skipped paths, the app's own origins, and here `cookie_check` (`_bad_session_cookie`: a
+session cookie whose itsdangerous signature fails, as opposed to one merely expired).
+
+- **Only watches.** The one request it answers is one with a NUL (path, query, form): 400
+  `Malformed request`. Everything else reaches the route untouched; a body it reads (form
+  types, ≤ 1 MB) is replayed to the route.
+- **Signatures** (`SIGNATURES`, `SCANNER_AGENT`, `PROBE_PATH`) are narrow on purpose:
+  `test_real_text_is_never_a_signal` holds a list of real input that must never match.
+  Add to it when a pattern changes. File parts and `*password*`/`*secret*` fields are never
+  inspected.
+- **Findings** (`report(kind, request, data)`, in a thread): `attack_signature` at once for
+  any signature; `suspicious_client` when a client's weights (`WEIGHTS`: 404 under `/api/`,
+  403, 422, cross-site writes, bad cookies…) reach 15 in 10 min; `sync_auth_fail` for a 401
+  under the critical prefix (portal only). Each at most once an hour per client, with a
+  `held_back` count; single errors are never rows. Here they become `security.*` audit
+  events (`_report_signal`), which `alerts.RULES` turn into alerts keyed by address.
+- **The portal's findings** are rows in its `portal_security_events`. Each sync tick, when the
+  heartbeat's `security_events_rev` passes our cursor (stream `security_events_pull`),
+  `portal_sync.pull_security_events` takes them through `audit.ingest(…, "portal")`: the
+  file, the alert rules and `audit_events` with `source = 'portal'`, everything treated as
+  untrusted (timestamp shape, severity, sizes). A portal before 1.1 reports no rev and is
+  never asked.
+- Tests: `test_security_signals.py` (the middleware, no database), the pull in
+  `test_signup_sync.py`, and `portal/test_security_events.py`.
 
 ## Passkeys (`routers/passkeys.py`)
 

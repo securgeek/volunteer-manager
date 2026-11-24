@@ -52,7 +52,7 @@ def _load_api() -> tuple[dict[str, Any], dict[str, str]]:
     from api_auth import TokenChecker
     from routers import export
 
-    spec = get_openapi(title="BSides export API", version="1", routes=export.router.routes)
+    spec = get_openapi(title="Volunteer Manager export API", version="1", routes=export.router.routes)
     scopes = {}
     for route in export.router.routes:
         for dep in route.dependant.dependencies:

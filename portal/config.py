@@ -80,6 +80,12 @@ class Settings:
         # A response floor, so timing doesn't leak what the copy doesn't.
         self.response_floor_ms = _int("PORTAL_RESPONSE_FLOOR_MS", 250)
 
+        # Strict input validation (validation.py): "report" records anomalies and lets the
+        # request through as before; "enforce" refuses them too.
+        self.strict = os.getenv("PORTAL_STRICT", "report").strip().lower() or "report"
+        if self.strict not in ("report", "enforce"):
+            raise ConfigError(f"PORTAL_STRICT must be report or enforce, got {self.strict!r}")
+
         # Sync request signing (§2). SYNC_SECRET_PREV lets a rotation land without
         # restarting both services at the same moment.
         self.sync_skew_sec = _int("SYNC_SKEW_SEC", 300)

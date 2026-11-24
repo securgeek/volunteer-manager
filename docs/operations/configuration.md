@@ -23,6 +23,12 @@ The backend also reads `DB_HOST`, `DB_PORT`, `DB_NAME` and `DB_USER`. compose se
 the `postgres` service, so they don't belong in `.env`. The portal's SQLite file is
 `PORTAL_DB`, set to `/data/portal.db` on the `portal_data` volume.
 
+## Audit log
+
+| Setting | Read by | Default | What it does |
+|---|---|---|---|
+| `AUDIT_RETENTION_DAYS` | backend | `365` | How many days the `audit_events` table keeps an event. It's pruned at startup and once a day. `0` keeps everything. `logs/audit.jsonl` is never pruned: it's the complete record (see [Deployment](deployment.md) for rotating it). |
+
 ## Shared between the backend and the portal
 
 These must be **identical** on both sides. The backend and the portal compare
@@ -85,6 +91,12 @@ Keep both above 1024, since rootless podman can't bind lower ports.
 | Setting | Read by | What it does |
 |---|---|---|
 | `DEPLOY_HOST` | you, for rsync | The server to copy the repo to: `rsync -aF BSides/ "$DEPLOY_HOST:Scheduler/"`. No container reads it. It lives in `.env` so the address isn't in the repo. |
+
+## Portal input validation
+
+| Setting | Read by | Default | What it does |
+|---|---|---|---|
+| `PORTAL_STRICT` | portal | `report` | How strictly the portal treats input the volunteer pages can't send (a name with digits, an unknown field, an invisible character). Either way it's recorded as a `portal.anomaly` event and the organizers ticked for security alerts are emailed. `report` then lets the request through as before; `enforce` refuses it with a bare 400. Start with `report`, check the audit log for anomalies from real volunteers, then switch to `enforce`. Anything else stops the portal at startup. |
 
 ## Portal tuning
 

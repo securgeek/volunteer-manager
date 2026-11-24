@@ -104,8 +104,8 @@ the top of `run_lint.sh`. A run fails if a score falls below its threshold.
 
 | App | Code: score | Code: ratchet | Tests: score | Tests: ratchet |
 |---|---|---|---|---|
-| portal | 8.98 | **8.9** | 9.81 | **9.8** |
-| backend | 8.82 | **8.8** | 9.74 | **9.7** |
+| portal | 9.02 | **9.0** | 9.84 | **9.8** |
+| backend | 9.03 | **9.0** | 9.79 | **9.7** |
 | mailrelay | 8.85 | **8.8** | 9.75 | **9.7** |
 | vol_mail | 8.62 | **8.6** | 9.40 | **9.3** |
 
@@ -117,6 +117,8 @@ History:
 |---|---|---|
 | 2026-11-18 | First baseline, when lint was introduced | 8.8 / 8.6 / 8.8 / 8.1 |
 | 2026-11-18 | Raised after the security-tier cleanup (static SQL, state holders, `raise … from`) | 8.9 / 8.8 / 8.8 / 8.6 |
+| 2026-11-23 | Backend raised with the structured audit log (`audit.py`) | 8.9 / 8.9 / 8.8 / 8.6 |
+| 2026-11-23 | Portal and backend raised with security alerts (`alerts.py`) | 9.0 / 9.0 / 8.8 / 8.6 |
 
 Scores are per app because the apps are linted separately: backend/ and portal/ both have
 modules called `db` and `main`, so one pylint run would resolve imports against the wrong app.
@@ -276,6 +278,23 @@ built. Each of these points is documented in the CLAUDE.md beside the code it de
 - **The landing page's Markdown** is rendered with raw HTML and images off and only web,
   email and same-site links, because it's inserted into a public page as HTML.
 
+**Detection and alerting**
+
+- **An audit log** (`backend/audit.py`): every write, sign-in and refusal is one JSON line in
+  `logs/audit.jsonl` and a row in `audit_events`. Caller-supplied text can't forge a line.
+- **Failed password sign-ins are rate limited** per username and address, counting only
+  failures, and an unknown username takes as long to refuse as a wrong password.
+- **Request signals** (`security_signals.py`, the same file in both apps) watch for attack
+  patterns, scanners, probing, malformed input, cross-site writes and forged session
+  cookies. They only watch: the one request refused is one carrying a NUL.
+- **Strict portal input** (`portal/validation.py`): the volunteer pages check every field by
+  the portal's own rules before sending, from one shared list of cases both test suites run,
+  so input that breaks them is an anomaly: recorded and alerted on, and refused once
+  `PORTAL_STRICT=enforce`.
+- **Alerts** (`backend/alerts.py`) turn those, and account and key changes, into email to
+  the organizers ticked for security alerts, at most once an hour per cause. The portal sends
+  them through a fixed template with every detail defanged.
+
 **Runtime**
 
 - **Images:** Alpine base images, with no build tools or curl in them.
@@ -301,12 +320,23 @@ What nothing checks today, roughly in order of value:
   column. Other signed-in sessions, and the backend's session cache, carry on. Only a
   password reset by email deletes the account's sessions.
 - **The frontend.** The Vue/JavaScript code has no linter or security scanner.
+- **Requests nginx answers itself.** On the public hostname, nginx 404s everything outside
+  `/`, `/apply/` and `/api/portal/`, so a scanner's tries at `/wp-login.php` or `/.env` reach
+  no app and raise no signal. Only nginx's own access log has them.
+- **A session that moves.** Nothing notices a session cookie used from a new network
+  part-way through a session (a stolen cookie). `sessions.ip_addr` holds the real client
+  address since 1.1, so the check can be added; it isn't yet.
+- **Portal strict mode starts in report.** Until `PORTAL_STRICT=enforce`, input the
+  volunteer pages can't send is alerted on but still accepted.
+- **Detection never blocks.** A client that sets off alerts keeps being served until an
+  organizer does something about it. That's deliberate (an automatic block can lock an
+  organizer out on event day), but it means the alerts are the defence, not a wall.
 - **Types.** No type checker (mypy or pyright). Annotations aren't verified.
 - **Tooling code.** `docs/` and `lint/` aren't in `run_lint.sh`'s app list. The plugin is
   tested, but neither directory is linted.
 - **Postgres-only tests** skip unless `TEST_PG_HOST` is set, so `./run_tests.sh` alone
-  doesn't run them. That's 128 of the backend's 163 tests, including every export, invite,
-  passkey, CSV import and migration test. backend/CLAUDE.md → Tests explains how to start a throwaway Postgres
+  doesn't run them. That's 205 of the backend's 376 tests (as of November 2026), including
+  every export, invite, passkey, CSV import, migration, audit-table and Audit Log test. backend/CLAUDE.md → Tests explains how to start a throwaway Postgres
   for them.
 - **Broad catches that re-raise.** pylint's `broad-exception-caught` ignores a handler that
   raises, so two are unflagged:

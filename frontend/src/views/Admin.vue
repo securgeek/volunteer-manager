@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, useTemplateRef, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { startEvents, stopEvents, useEvents } from '../composables/useEvents.js'
 import Button    from 'primevue/button'
 import Menu      from 'primevue/menu'
@@ -31,6 +32,7 @@ import ProfileDialog   from '../components/ProfileDialog.vue'
 import ScheduleView    from '../components/ScheduleView.vue'
 import VolunteersTab   from './admin/VolunteersTab.vue'
 import RadiosTab       from './admin/RadiosTab.vue'
+import AuditLog        from '../components/AuditLog.vue'
 import VolunteerCheckin from '../components/VolunteerCheckin.vue'
 
 // ── state ─────────────────────────────────────────────────────────────────────
@@ -128,9 +130,30 @@ on('rating',     () => load_schedule())
 on('radio',      () => radios_tab_ref.value?.reload())
 
 watch(view, (v) => {
-  if (v === 'app') { load_schedule(); startEvents(); refresh_pending() }
+  if (v === 'app') { load_schedule(); startEvents(); refresh_pending(); open_audit_from_link() }
   else             { stopEvents() }
 })
+
+// ── audit log ─────────────────────────────────────────────────────────────────
+// Admin → Audit Log (components/AuditLog.vue), for organizers. /admin/audit, the link in alert
+// emails, opens it as soon as the app loads (an alias of /admin in router.js, so no remount);
+// the address follows the dialog open and closed.
+const route  = useRoute()
+const router = useRouter()
+const audit_log_ref = useTemplateRef('audit_log')
+async function open_audit() {
+  if (route.path !== '/admin/audit') router.replace('/admin/audit')
+  await nextTick()
+  audit_log_ref.value?.open()
+}
+function open_audit_from_link() {
+  if (route.path !== '/admin/audit') return
+  if (is_admin.value) open_audit()
+  else router.replace('/admin')        // not an organizer: just the app
+}
+function on_audit_closed() {
+  if (route.path === '/admin/audit') router.replace('/admin')
+}
 
 function on_schedule_updated(new_schedule) {
   schedule.value = new_schedule
@@ -147,8 +170,13 @@ const can_checkin = computed(() => [...ADMIN_ROLES, 'checkin'].includes(user_inf
 // The scanner mounts only while open, so the camera runs only after the button is pressed.
 const checkin_open = ref(false)
 
+const TABS = ['schedule', 'volunteers', 'radios']
 function saved_tab() {
-  try { return localStorage.getItem(TAB_KEY) || 'schedule' } catch { return 'schedule' }
+  // Only a tab that still exists: an older build had an Audit Log tab.
+  try {
+    const t = localStorage.getItem(TAB_KEY)
+    return TABS.includes(t) ? t : 'schedule'
+  } catch { return 'schedule' }
 }
 const tab = ref(saved_tab())
 watch(tab, (t) => { try { localStorage.setItem(TAB_KEY, t) } catch { /* private mode */ } })
@@ -207,6 +235,8 @@ const admin_menu_items = [
   { label: 'App Settings', icon: 'pi pi-cog',   command: () => app_settings_ref.value.open({ title: app_title.value, logo: app_logo.value }) },
   { label: 'Email Key',    icon: 'pi pi-key',   command: () => email_key_ref.value.open() },
   { label: 'API Keys',     icon: 'pi pi-link',  command: () => api_tokens_ref.value.open() },
+  { separator: true },
+  { label: 'Audit Log',    icon: 'pi pi-list',  command: () => open_audit() },
 ]
 
 // Right-aligned, for every role. The group label is the header: who's signed in, as what.
@@ -313,6 +343,7 @@ async function logout() {
   <EmailTemplate ref="email_template" />
   <UserManager     ref="user_manager" />
   <ApiTokens       ref="api_tokens" />
+  <AuditLog        ref="audit_log" @closed="on_audit_closed" />
   <MyPasskeys      ref="my_passkeys" />
   <ProfileDialog   ref="profile" :username="user_info.username" :role="user_info.role"
                    @open-passkeys="my_passkeys_ref.open()" />

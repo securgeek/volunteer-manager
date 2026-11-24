@@ -24,6 +24,10 @@ COPY main.py .
 COPY scheduler.sql .
 COPY migrations/ ./migrations/
 COPY db.py .
+COPY audit.py .
+COPY ratelimit.py .
+COPY alerts.py .
+COPY security_signals.py .
 COPY portal_sync.py .
 COPY passkey_providers.py .
 COPY checkin_codes.py .

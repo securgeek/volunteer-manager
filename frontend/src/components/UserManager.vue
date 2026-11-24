@@ -1,11 +1,12 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import Dialog    from 'primevue/dialog'
 import Button    from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Password  from 'primevue/password'
 import Select    from 'primevue/select'
 import Message   from 'primevue/message'
+import Checkbox  from 'primevue/checkbox'
 
 const ROLES = [
   { label: 'Organizer', value: 'organizer' },
@@ -91,6 +92,26 @@ function fmt_date(iso) {
 
 function is_self(user) {
   return user.username === current_username
+}
+
+// ── security alerts ───────────────────────────────────────────────────────────
+// Who gets security alert emails (backend alerts.py; every organizer can read the Audit Log
+// regardless). Organizers only, and any organizer can change anyone's. It may be nobody,
+// which the warning above the list says, as the Audit Log does.
+const alerts_reach_nobody = computed(() => users.value.length > 0 &&
+  !users.value.some(u => u.audit_alerts && u.role === 'organizer' && u.email))
+
+async function set_audit_alerts(user) {
+  err.value = ''
+  const fd = new FormData()
+  fd.append('user_id', user.user_id)
+  fd.append('enabled', user.audit_alerts ? '1' : '0')
+  const resp = await fetch('/api/users/set_audit_alerts', { method: 'POST', body: fd })
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => null)
+    err.value = body?.detail || 'Failed to change security alerts.'
+  }
+  load()
 }
 
 // ── role change ───────────────────────────────────────────────────────────────
@@ -275,10 +296,14 @@ async function add_user() {
 
 <template>
   <Dialog v-model:visible="visible" header="User Management"
-          :style="{ width: '68rem' }" modal>
+          :style="{ width: '72rem', maxWidth: '95vw' }" modal>
 
     <Message v-if="err" severity="error" :closable="false" style="margin-bottom:0.75rem;">
       {{ err }}
+    </Message>
+    <Message v-if="alerts_reach_nobody" severity="warn" :closable="false" style="margin-bottom:0.75rem;">
+      Security alerts aren't emailed to anyone. Tick <strong>Security alerts</strong> for an
+      organizer who has an email address.
     </Message>
 
     <!-- ── user list ─────────────────────────────────────────────────────────── -->
@@ -291,6 +316,7 @@ async function add_user() {
         <span>Last login</span>
         <span>Failed logins</span>
         <span>Passkeys</span>
+        <span v-tooltip.top="'Gets security alert emails (needs an email address)'">Security alerts</span>
         <span></span>
       </div>
 
@@ -320,6 +346,14 @@ async function add_user() {
             <span v-else>—</span>
           </span>
           <span class="muted center">{{ user.passkey_count || '—' }}</span>
+          <span class="center">
+            <Checkbox v-model="user.audit_alerts" binary
+                      :disabled="user.role !== 'organizer' && !user.audit_alerts"
+                      :aria-label="`Security alert emails for ${user.username}`"
+                      v-tooltip.top="user.role !== 'organizer' ? 'Organizers only'
+                                     : user.audit_alerts && !user.email ? 'No email address: alerts can\'t reach them' : ''"
+                      @change="set_audit_alerts(user)" />
+          </span>
           <div class="actions">
             <Button size="small" icon="pi pi-key" severity="secondary" variant="text"
                     v-tooltip.top="'Reset password'"
@@ -442,7 +476,7 @@ async function add_user() {
 .user-block  { border-bottom: 1px solid var(--p-content-border-color); }
 .user-row    {
   display: grid;
-  grid-template-columns: 1fr 9rem 1.4fr 11rem 6rem 5rem 7rem;
+  grid-template-columns: 1fr 9rem 1.4fr 11rem 6rem 5rem 5rem 7rem;
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.25rem;

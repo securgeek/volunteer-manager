@@ -1,4 +1,4 @@
-# BSidesCharm Volunteer Scheduler
+# Volunteer Manager
 
 ## Project layout
 
@@ -24,7 +24,7 @@ BSides/
 ├── plans/            ← Working plans (gitignored, never synced)
 ├── compose.yml       ← Builds both services, backend_data volume
 ├── compose.maintenance.yml, maintenance/, maintenance.sh ← "back soon" page while the stack is down
-├── logs/audit.log    ← Bind-mounted audit log
+├── logs/audit.jsonl  ← Bind-mounted audit log, one JSON object per line (backend/audit.py)
 └── Scheduler/        ← Original Flask app (reference only, not active)
 ```
 
@@ -190,6 +190,26 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
 - `get_session_data(request, db)` — Depends, returns `{"user_id", "username", "role"}` or `None`.
 - `RoleChecker(*roles)` — callable class used as a Depends; raises 401/403. Example: `Depends(RoleChecker("organizer"))`.
 
+### Audit log and alerts
+- Every write, sign-in and refusal is an `audit("event.code", …)` call (`backend/audit.py`):
+  a JSON line in `logs/audit.jsonl` and a row in `audit_events`. Codes come from
+  `audit.EVENTS`, which a test enforces.
+- `backend/alerts.py` runs rules over those events and emails alerts through the portal
+  (`send_admin_mail` kind `alert`) to organizers with `users.audit_alerts` and an email.
+  See `backend/CLAUDE.md` → Security alerts; the plan is `plans/audit_alerting.md`.
+- **Admin → Audit Log** (a dialog; `/admin/audit`, where alert emails link, opens it) is for
+  every organizer. Who gets the alert **emails** is separate: `users.audit_alerts`, which any
+  organizer ticks for any organizer in Admin → Users. It may be nobody (alerts are then only
+  recorded, and both dialogs warn).
+- Failed password sign-ins are rate limited (`backend/CLAUDE.md` → Session and auth).
+- `security_signals.py` (the **same file** in `backend/` and `portal/`; a test compares them)
+  watches every request for attack patterns, probing and malformed input, and refuses only a
+  NUL. Portal findings reach the backend's audit log over the sync API.
+- The volunteer pages check input by the portal's own rules before sending
+  (`frontend/src/lib/portal_rules.js` ↔ `portal/validation.py`, one shared case list in
+  `portal/test_data/validation_cases.json`). Input breaking them is a `portal.anomaly`:
+  alerted on, and refused when `PORTAL_STRICT=enforce`.
+
 ### Roles
 | Role | Can do |
 |------|--------|
@@ -303,6 +323,9 @@ Frontend wizard state machine: `loading → create_admin → login → import_sc
 | GET  | `passkeys` | any (own) |
 | POST | `passkeys/rename`, `passkeys/delete` | any (own) |
 | POST | `passkeys/clear_user` | organizer |
+| GET  | `admin/audit` (filters, `before_id` paging), `admin/audit/status` | organizer |
+| POST | `admin/audit/test_alert` (one a minute) | organizer |
+| POST | `users/set_audit_alerts` (`user_id`, `enabled`; organizers only) | organizer |
 
 ### Schedule structure
 

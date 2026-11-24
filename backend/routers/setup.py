@@ -24,7 +24,8 @@ from psycopg2 import errorcodes
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, UploadFile, File
 
 from checkin_codes import DEFAULT_TZ
-from db import get_db, get_session_data, RoleChecker, audit, _session_cache, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, _session_cache, PgClient
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -139,6 +140,7 @@ def setup_status(
 
 @router.post("/api/setup/create_admin")
 def setup_create_admin(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: PgClient = Depends(get_db),
@@ -146,6 +148,7 @@ def setup_create_admin(
     """Create the first organizer account; rejects with 403 once any user exists.
 
     Args:
+        request: The incoming request, for the audit log.
         username: Desired admin username; lowercased and stripped before storage.
         password: Plaintext password; must be at least 8 characters.
         db: Injected database connection.
@@ -159,6 +162,8 @@ def setup_create_admin(
     """
     from argon2 import PasswordHasher
     if db.execute("SELECT 1 FROM users LIMIT 1;").fetchone():
+        audit("setup.create_admin.refused", request, None,
+              "First-admin setup called after setup was complete", username=username)
         raise HTTPException(status_code=403, detail="Setup already complete — admin already exists")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
@@ -166,10 +171,13 @@ def setup_create_admin(
     user_id = str(uuid.uuid4())
     ph      = PasswordHasher()
     db.execute(
-        "INSERT INTO users (user_id, username, password_hash, role) VALUES (?, ?, ?, 'organizer');",
+        "INSERT INTO users (user_id, username, password_hash, role, audit_alerts) "
+        "VALUES (?, ?, ?, 'organizer', TRUE);",
         (user_id, username.lower().strip(), ph.hash(password))
     )
     db.commit()
+    audit("setup.create_admin", request, None, "Created the first admin account",
+          who=username.lower().strip(), user_id=user_id)
     return {"username": username.lower().strip(), "role": "organizer"}
 
 
@@ -263,7 +271,7 @@ def setup_import_schedule(
         inserted += 1
 
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("setup.import_schedule", request, request.session.get("session_id"),
           f"Imported schedule: {inserted} slots, {len(seen_days)} days, "
           f"{len(seen_times)} times, {len(seen_pos)} positions ({skipped} skipped).")
     return {
@@ -353,7 +361,7 @@ def setup_import_volunteers(
             skipped += 1
 
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("setup.import_volunteers", request, request.session.get("session_id"),
           f"Imported {inserted} volunteers via CSV ({skipped} skipped).")
     return {"inserted": inserted, "skipped": skipped, "errors": errors}
 
@@ -482,7 +490,8 @@ def set_event_tz(
         (event_tz,)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Set event timezone to {event_tz}")
+    audit("settings.change", request, request.session.get("session_id"),
+          f"Set event timezone to {event_tz}")
     return {"ok": True, "event_tz": event_tz}
 
 
@@ -544,7 +553,7 @@ def setup_set_title(
             db.execute("DELETE FROM app_kv WHERE app_key = ?;", (key,))
     db.commit()
     changed = ", ".join(given)
-    audit(request, request.session.get("session_id"),
+    audit("settings.change", request, request.session.get("session_id"),
           f"Set app title to {title!r}" + (f" and {changed}" if changed else ""))
     _queue_branding_push()
     stored = {r["app_key"]: r["val"] for r in db.execute(
@@ -643,7 +652,7 @@ def set_app_logo(
                 (key, val)
             )
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("settings.change", request, request.session.get("session_id"),
           "Removed app logo" if remove else "Updated app logo and favicon")
     _queue_branding_push()
     return {"ok": True}
@@ -686,7 +695,7 @@ def set_header_logo(
             (_logo_data_url(logo),)
         )
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("settings.change", request, request.session.get("session_id"),
           "Removed header logo" if remove else "Updated header logo")
     _queue_branding_push()
     return {"ok": True}

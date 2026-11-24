@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import Response
 
 import email_render
-from db import PgClient, RoleChecker, audit, get_app_kv, get_db
+from audit import audit
+from db import PgClient, RoleChecker, get_app_kv, get_db
 from routers.export import volunteer_records
 
 router = APIRouter()
@@ -152,7 +153,8 @@ def save_template(
         "updated_by = excluded.updated_by, updated_at = excluded.updated_at;",
         (TEMPLATE_KEY, subject.strip(), body_md, shift_md, s_data["username"]))
     db.commit()
-    audit(request, request.session.get("session_id"), "Saved the schedule email template")
+    audit("email_template.change", request, request.session.get("session_id"),
+          "Saved the schedule email template")
     return {"ok": True, "missing_assets": _missing_assets(db, body_md, shift_md)}
 
 
@@ -183,7 +185,8 @@ async def upload_asset(
     ctype, ext = found
     stored = _store_asset(db, _asset_name(name or file.filename or "", ext), ctype, data,
                           s_data["username"])
-    audit(request, request.session.get("session_id"), f"Uploaded email image {stored['name']}")
+    audit("email_template.change", request, request.session.get("session_id"),
+          f"Uploaded email image {stored['name']}")
     return stored
 
 
@@ -217,7 +220,8 @@ def add_site_logo(
                             "(an SVG won't show in many mail apps). Upload a PNG version instead.")
     ctype, ext = found
     stored = _store_asset(db, f"site-logo.{ext}", ctype, data, s_data["username"])
-    audit(request, request.session.get("session_id"), "Copied the site logo into the email images")
+    audit("email_template.change", request, request.session.get("session_id"),
+          "Copied the site logo into the email images")
     return stored
 
 
@@ -238,7 +242,8 @@ def delete_asset(
     """
     db.execute("DELETE FROM email_assets WHERE name = ?;", (name,))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Deleted email image {name}")
+    audit("email_template.change", request, request.session.get("session_id"),
+          f"Deleted email image {name}")
     return {"ok": True}
 
 
@@ -354,7 +359,8 @@ def package(
             "template_updated_at": t["updated_at"]}
     data = email_render.build_package(t["subject"], t["body_md"], t["shift_md"],
                                       _assets(db, with_data=True), meta)
-    audit(request, request.session.get("session_id"), "Downloaded the schedule email package")
+    audit("email_template.download", request, request.session.get("session_id"),
+          "Downloaded the schedule email package")
     fname = f"schedule-email-{now:%Y%m%d-%H%M}.zip"
     return Response(content=data, media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})

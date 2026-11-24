@@ -22,7 +22,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import portal_sync
-from db import PgClient, RoleChecker, audit, get_app_kv, get_db
+from audit import audit
+from db import PgClient, RoleChecker, get_app_kv, get_db
 from routers.invites import clean_email, token_hash
 
 # A badge number given at approval. Not `p-…`: that prefix is the portal's namespace for
@@ -86,7 +87,7 @@ async def sync_now(
         s_data: The organizer's session.
     """
     result = await portal_sync.sync_now()
-    audit(request, request.session.get("session_id"), "Triggered portal sync")
+    audit("portal.sync_now", request, request.session.get("session_id"), "Triggered portal sync")
     return result
 
 
@@ -201,7 +202,7 @@ def approve_signup(
         db.execute("UPDATE volunteers SET status = 'active', portal_dirty = TRUE "
                    "WHERE vol_id = ?;", (vol_id,))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("portal.signup.approve", request, request.session.get("session_id"),
           f"Approved signup {vol_id}" + (f" as {final}" if final != vol_id else ""))
     portal_sync.request_push()
     return {"ok": True, "vol_id": final}
@@ -228,7 +229,8 @@ def decline_signup(
     db.execute("UPDATE volunteers SET inactive_at = NOW() AT TIME ZONE 'UTC', "
                "portal_dirty = TRUE WHERE vol_id = ?;", (vol_id,))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Made signup {vol_id} inactive")
+    audit("portal.signup.decline", request, request.session.get("session_id"),
+          f"Made signup {vol_id} inactive")
     portal_sync.request_push()
     return {"ok": True}
 
@@ -272,14 +274,15 @@ def set_portal_settings(
             raise HTTPException(status_code=400, detail="Overage must be a whole number from 0 "
                                 f"to {portal_sync.OVERAGE_MAX}")
         put("portal_overage_pct", str(pct))
-        audit(request, sid, f"Set signup overage to {pct}%")
+        audit("portal.settings", request, sid, f"Set signup overage to {pct}%")
     if signup_open is not None:
         want = "1" if signup_open == "1" else "0"
         if want == "1" and not get_app_kv(db, "email_pubkey"):
             raise HTTPException(status_code=409, detail="Upload an email public key (Admin → "
                                 "Email Key) before opening signup.")
         put("portal_signup_open", want)
-        audit(request, sid, "Opened volunteer signup" if want == "1" else "Closed volunteer signup")
+        audit("portal.settings", request, sid,
+              "Opened volunteer signup" if want == "1" else "Closed volunteer signup")
     db.commit()
     portal_sync.request_push()
     return {"ok": True, "signup_open": get_app_kv(db, "portal_signup_open") == "1",
@@ -440,7 +443,7 @@ def keep_flagged_shift(
     db.commit()
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="No open flag for that shift")
-    audit(request, request.session.get("session_id"),
+    audit("portal.shift_flag.keep", request, request.session.get("session_id"),
           f"Kept {vol_id} on {day_key} {time_key} despite their dropping it")
     return {"ok": True}
 
@@ -477,7 +480,7 @@ def set_inactive(
         "THEN COALESCE(inactive_at, NOW() AT TIME ZONE 'UTC') ELSE NULL END, "
         "portal_dirty = TRUE WHERE vol_id = ?;", (inactive == "1", vol_id))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("volunteer.set_inactive", request, request.session.get("session_id"),
           f"{'Made inactive' if inactive == '1' else 'Reinstated'} {row['name']!r} ({vol_id})")
     portal_sync.request_push()
     # Open browsers: the schedule's replacement markers and the banner change.
@@ -531,13 +534,14 @@ async def purge_volunteers(
     try:
         deleted = await portal_sync.purge_volunteers(db, ids)
     except RuntimeError as exc:
-        audit(request, request.session.get("session_id"),
+        audit("volunteer.purge.fail", request, request.session.get("session_id"),
               f"Purge of {len(ids)} volunteer(s) failed at the portal")
         raise HTTPException(status_code=502, detail="The portal couldn't be reached, so "
                             "nothing was deleted. Try again shortly.") from exc
     sid = request.session.get("session_id")
     for v in deleted:
-        audit(request, sid, f"Purged volunteer {found[v]['name']!r} ({v})")
+        audit("volunteer.purge", request, sid, f"Purged volunteer {found[v]['name']!r} ({v})",
+              vol_id=v)
     from routers.events import broadcast
     broadcast("volunteers")
     broadcast("schedule")
@@ -616,7 +620,7 @@ def create_signup_invite(
     """
     invite_id, link, expires_at, label = _new_signup_invite(db, label, days, s_data["username"])
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("portal.invite.create", request, request.session.get("session_id"),
           f"Created early-access invite {invite_id} ({label!r}, {days} days)")
     portal_sync.request_push()
     return {"invite_id": invite_id, "link": link, "expires_at": _ts(expires_at)}
@@ -721,8 +725,9 @@ async def send_signup_invite(
         db.execute("DELETE FROM signup_invites WHERE invite_id = ?;", (invite_id,))
         db.commit()
         portal_sync.request_push()
-        audit(request, sid, f"Early-access invite {invite_id} ({label!r}) not sent: "
-                            f"{'hourly limit' if limited else 'send failed'}")
+        audit("portal.invite.send_fail", request, sid,
+              f"Early-access invite {invite_id} ({label!r}) not sent: "
+              f"{'hourly limit' if limited else 'send failed'}")
         if limited:
             raise HTTPException(status_code=429, detail="The hourly limit for invite emails is "
                                 "used up. Try again later.",
@@ -732,7 +737,8 @@ async def send_signup_invite(
     db.execute("UPDATE signup_invites SET emailed_at = NOW() AT TIME ZONE 'UTC' "
                "WHERE invite_id = ?;", (invite_id,))
     db.commit()
-    audit(request, sid, f"Emailed early-access invite {invite_id} ({label!r}, {days} days)")
+    audit("portal.invite.send", request, sid,
+          f"Emailed early-access invite {invite_id} ({label!r}, {days} days)")
     return {"invite_id": invite_id, "label": label, "expires_at": _ts(expires_at)}
 
 
@@ -760,6 +766,7 @@ def revoke_signup_invite(
     if cur.rowcount != 1:
         raise HTTPException(status_code=404, detail="No unused invite with that id")
     db.commit()
-    audit(request, request.session.get("session_id"), f"Revoked early-access invite {invite_id}")
+    audit("portal.invite.revoke", request, request.session.get("session_id"),
+          f"Revoked early-access invite {invite_id}")
     portal_sync.request_push()
     return {"ok": True}

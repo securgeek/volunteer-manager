@@ -12,7 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 
 import portal_content
-from db import get_db, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, RoleChecker, PgClient
 
 router = APIRouter()
 
@@ -161,7 +162,7 @@ def save_content(
                    "ON CONFLICT(app_key) DO UPDATE SET val = excluded.val;",
                    (key, json.dumps(clean)))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("portal.content", request, request.session.get("session_id"),
           f"{'Reset' if clean is None else 'Saved'} the portal's {part}")
     import portal_sync
     portal_sync.request_push()

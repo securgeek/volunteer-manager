@@ -9,17 +9,23 @@ Run as a script, it starts uvicorn on port 5000. It takes `-d` for debug logging
 """
 import asyncio
 import logging
+import os
 import secrets
 import argparse
+from dataclasses import dataclass
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import itsdangerous
+from fastapi import FastAPI, Request
 from starlette.middleware.sessions import SessionMiddleware
 
+import alerts
+import audit
 import db as _db
+import security_signals
 import portal_sync
 from routers import (auth, schedule, volunteers, users, email_keys, setup, events, radios,
                     portal_admin, passkeys, invites, password_reset, checkin, api_tokens,
-                    export, email_template, portal_content)
+                    export, email_template, portal_content, audit_log)
 
 
 class QuietPolls(logging.Filter):
@@ -54,6 +60,32 @@ def quiet_polls() -> None:
         access.addFilter(QuietPolls())
 
 
+log = logging.getLogger("main")
+
+PRUNE_EVERY_SEC = 24 * 3600
+
+
+def _prune_audit() -> None:
+    """Prune `audit_events` once (audit.prune). Logs and swallows a failure."""
+    conn = _db.get_conn()
+    try:
+        gone = audit.prune(conn)
+        if gone:
+            log.info("audit: pruned %d event(s) older than %d days", gone, audit.retention_days())
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Deliberately broad: a failed prune must not stop the loop; it tries again tomorrow.
+        log.error("audit: prune failed: %s", exc)
+    finally:
+        _db.put_conn(conn)
+
+
+async def _prune_audit_daily() -> None:
+    """Prune `audit_events` now and then every PRUNE_EVERY_SEC, until cancelled."""
+    while True:
+        await asyncio.to_thread(_prune_audit)
+        await asyncio.sleep(PRUNE_EVERY_SEC)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start the app's background parts, and stop them on shutdown.
@@ -70,10 +102,73 @@ async def lifespan(app: FastAPI):
     # No-op unless PORTAL_SYNC_URL and the sync keys are set, so a deployment without a
     # portal behaves exactly as it did before.
     portal_sync.start(loop)
+    # Only when the audit table is in use (main below); tests start the app without it.
+    pruner = None
+    if audit.configured_to_db():
+        pruner = loop.create_task(_prune_audit_daily())
+        alerts.start(loop)
     yield
+    if pruner:
+        pruner.cancel()
+        alerts.stop()
 
 
 app = FastAPI(title="Conference Scheduler", lifespan=lifespan)
+
+
+@dataclass
+class _MainState:
+    """Module state set in __main__: the session cookie's signing key, for the signals'
+    cookie check (None until then, which skips the check)."""
+
+    session_secret: str | None = None
+
+
+_main = _MainState()
+
+
+def _report_signal(kind: str, request: Request, data: dict) -> None:
+    """Record a SecuritySignals finding as an audit event (and so, through alerts, an alert).
+
+    Args:
+        kind: A key of security_signals.SEVERITY.
+        request: The request that produced it.
+        data: The finding's details.
+    """
+    sid = (request.scope.get("session") or {}).get("session_id")
+    if kind == "attack_signature":
+        audit.audit("security.attack_signature", request, sid,
+                    "Attack patterns in a request", **data)
+    elif kind == "suspicious_client":
+        audit.audit("security.suspicious_client", request, sid,
+                    "Unusual run of refused or malformed requests from one client", **data)
+    elif kind == "sync_auth_fail":
+        audit.audit("security.sync_auth_fail", request, sid,
+                    "Bad signature on the sync API", **data)
+
+
+def _bad_session_cookie(request: Request) -> bool | None:
+    """False when the request carries a session cookie whose signature fails (not merely an
+    expired one, which an old tab sends); None when there's nothing to say."""
+    cookie = request.cookies.get("session")
+    if not cookie or not _main.session_secret:
+        return None
+    try:
+        itsdangerous.TimestampSigner(_main.session_secret).unsign(cookie.encode("utf-8"))
+    except itsdangerous.BadSignature:
+        return False
+    return None
+
+
+# Inside SessionMiddleware (added in __main__, so outermost): the session is decoded by the
+# time a finding is reported, which names the signed-in user.
+app.add_middleware(
+    security_signals.SecuritySignals,
+    report=_report_signal, client_ip=audit.client_ip, api_prefix="/api/",
+    skip_paths=("/api/health",), cookie_check=_bad_session_cookie,
+    allowed_origins=tuple(o.strip() for o in (os.getenv("ADMIN_PUBLIC_URL", ""),
+                                               os.getenv("PORTAL_PUBLIC_URL", ""))),
+)
 
 @app.get("/api/health")
 def health():
@@ -101,16 +196,18 @@ app.include_router(api_tokens.router)
 app.include_router(export.router)
 app.include_router(email_template.router)
 app.include_router(portal_content.router)
+app.include_router(audit_log.router)
 
 if __name__ == "__main__":
     import uvicorn
 
     parser = argparse.ArgumentParser(prog="Conference Scheduler")
     parser.add_argument("-d", help="Debug logging", action="store_true")
-    parser.add_argument("--audit", help="Audit log path", default="/app/logs/audit.log")
+    parser.add_argument("--audit", help="Audit log path (JSON lines)",
+                        default="/app/logs/audit.jsonl")
 
     args = parser.parse_args()
-    _db.audit_log = args.audit
+    audit.configure(args.audit, to_db=True)
 
     # Without this the root logger has no handler, so Python's last-resort handler emits
     # WARNING and above only — every log.info() in this application is silently discarded,
@@ -132,6 +229,7 @@ if __name__ == "__main__":
     tmp.close()
     app.title = app_title
 
+    _main.session_secret = app_sec
     app.add_middleware(SessionMiddleware, secret_key=app_sec)
 
     # timeout_graceful_shutdown: open /api/events SSE streams never finish, so without it a

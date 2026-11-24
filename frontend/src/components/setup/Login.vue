@@ -73,6 +73,11 @@ async function submit() {
     const resp = await fetch('/api/login', { method: 'POST', body: form })
     if (resp.ok) {
       signed_in(await resp.json())
+    } else if (resp.status === 429) {
+      // Too many failed sign-ins (routers/auth.py). Retrying only keeps it locked.
+      const mins = Math.max(1, Math.ceil(Number(resp.headers.get('Retry-After') || 900) / 60))
+      error_msg.value = `Too many failed sign-ins. Wait about ${mins} minute${mins === 1 ? '' : 's'} `
+        + 'and try again, or use "Forgot password?" or a passkey.'
     } else {
       error_msg.value = 'Invalid username or password.'
     }

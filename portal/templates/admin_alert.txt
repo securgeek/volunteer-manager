@@ -1,0 +1,14 @@
+{{ app_title }}: security alert ({{ severity }})
+
+{{ title }}
+
+{{ facts }}
+{{ held_back }}
+Review it in the audit log:
+
+{{ link }}
+
+You get these alerts because your organizer account can read the audit log, where every alert
+is also recorded. The details above come from the request that set the alert off, and parts of
+them, such as a username, may have been typed by whoever sent it. Treat them as untrusted:
+anything that looked like a link has been broken on purpose.

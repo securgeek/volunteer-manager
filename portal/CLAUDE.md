@@ -99,15 +99,15 @@ during their own request. Every other volunteer message is an offline act by who
 
 ### Admin mail: the one exception
 
-`POST /api/sync/send_admin_mail` mails **organizer** invites and password resets, and
-**early-access signup invites** to would-be volunteers, for the scheduler, which has no mail
-path of its own. The address there comes from the scheduler, not
+`POST /api/sync/send_admin_mail` mails **organizer** invites and password resets,
+**early-access signup invites** to would-be volunteers, and **security alerts** to organizers,
+for the scheduler, which has no mail path of its own. The address there comes from the scheduler, not
 from someone proving it, so the endpoint is kept narrow:
 
 - signed sync API only, with `op_id` replay like every POST (a retry doesn't send twice);
-- three fixed templates (`templates/admin_invite.txt`, `admin_reset.txt`,
-  `signup_invite.txt`, via `Mailer.send_admin`), kind `invite`, `reset` or `signup_invite`,
-  plain text;
+- four fixed templates (`templates/admin_invite.txt`, `admin_reset.txt`, `admin_alert.txt`
+  via `Mailer.send_admin`, and the organizers' signup invite), kind `invite`, `reset`,
+  `alert` or `signup_invite`, plain text;
 - the link must start with the organizer site's own `{ADMIN_PUBLIC_URL}/admin/invite?t=` or
   `/admin/reset?t=` (matching the kind), with no whitespace. `ADMIN_PUBLIC_URL` falls back to
   `PORTAL_PUBLIC_URL` (`config.admin_url`); deployed, it's a separate hostname, because the
@@ -115,13 +115,76 @@ from someone proving it, so the endpoint is kept narrow:
 - one address, checked against a strict pattern (no header injection);
 - a `signup_invite` link must start with the portal's own
   `{PORTAL_PUBLIC_URL}/apply/signup?invite=`;
-- at most 20 admin mails an hour, and separately 200 signup invites an hour
+- an `alert` link must be exactly `{ADMIN_PUBLIC_URL}/admin/audit`, and its text is
+  **structured and defanged** (`_alert_values`, `alert_text`): `rule` matches
+  `^[a-z0-9][a-z0-9_.]{0,63}$`, `severity` is one of five, `title` ≤ 120 characters,
+  `held_back` an int, and `facts` at most 10 `[label, value]` pairs (≤ 40 / ≤ 200). Every
+  string has control and format characters (newlines, NUL, bidi) turned to spaces, `{{`
+  broken so it can't reach the template filler, and link-shaped text broken
+  (`https[:]//`, `www[.]`, `javascript[:]`). Alert details include things an attacker typed
+  (a username at sign-in), so they mustn't arrive as a clickable link in an organizer's inbox.
+  A bare domain (`evil.example`, no scheme or `www.`) is left alone, and some mail apps
+  link those anyway; the template's footer tells the reader the details are untrusted;
+- at most 20 admin mails an hour, separately 200 signup invites an hour
   (`SIGNUP_INVITE_MAIL_PER_HOUR`, under the relay's 300 so sign-in links still get through
-  during a batch), both counted from `portal_audit`, otherwise 429;
+  during a batch), and separately 60 alerts an hour (`ALERT_MAIL_PER_HOUR`, so a burst of
+  alerts can't use up the allowance password resets need, mid-attack), all counted from
+  `portal_audit`, otherwise 429;
 - audit and `sync_ops` record only `admin_mail.sent <kind>`, never the address or link.
 
 A compromised scheduler could therefore send its own site's invite, reset or signup-invite
-links to addresses it chose, but nothing else. `test_admin_mail.py` pins each of these.
+links to addresses it chose, or an alert of short, single-line, defanged text pointing at
+its own `/admin/audit`, but nothing else. `test_admin_mail.py` pins each of these.
+
+### Strict input validation (`validation.py`)
+
+The volunteer pages check every field before sending (`frontend/src/lib/portal_rules.js`), by
+the **same rules**: `test_data/validation_cases.json` lists accepted and refused inputs, and
+both `test_validation.py` and `node --test frontend/src/lib/portal_rules.test.js` (also in
+`run_lint.sh`) run every case. **Change a rule in both files and add the case.** So input
+breaking a rule here didn't come through the pages: it's an **anomaly**.
+
+- `validation.check(kind, value)` → `(clean, problem)`, kinds `name` (letters, marks, space,
+  `' ’ - .`, ≤ 60), `handle` (printable but `< > { } \``, ≤ 40), `email`, `text` (newlines
+  allowed, ≤ the question's max), `pick_key`, `token`. Every kind refuses control, format
+  (bidi, zero-width; the emoji joiner is allowed), private-use and separator characters.
+  NFC, trimming and space-collapsing are never problems: both sides normalize the same way.
+  Lengths count code points.
+- `problem` is `("error", …)` for an **ordinary mistake** (required and empty), which keeps its
+  helpful message, or `("anomaly", rule)`. `field()` acts on it; `anomaly(rule, where)`
+  records a `portal.anomaly` row in `portal_security_events` (pulled and alerted on like the
+  request signals) and, with `PORTAL_STRICT=enforce`, raises `Anomaly`: a bare
+  `400 Malformed request`. In `report` (the default) the request goes on with the old
+  forgiving behaviour. At most one row a minute per client, rule and path; the next carries
+  `held_back`.
+- `strict_request` is a router dependency on `auth`, `signup` and `branding` (not `sync`):
+  it remembers the request for `anomaly()` (a context variable; it's async so the value
+  reaches sync endpoints' threadpool), and flags a query parameter or form field the route
+  doesn't declare (read from the route's dependant) and a POST body that isn't a form.
+- `json_object` parses the `signup`/`update` JSON fields: no duplicate keys, NaN or Infinity,
+  ≤ 4 deep, ≤ 32 000 characters, only the listed keys. `typed` checks a value's type (a bool
+  is not an int). `_parse_picks` flags malformed keys and wrong counts.
+- **Not anomalies, on purpose:** an unknown *answer* key (dropped, as always) and a choice no
+  longer offered (the old 400). An organizer editing the questionnaire mid-signup produces
+  both from a real volunteer's draft. The pages filter them out too (`signup_answers`).
+- nginx caps `/api/portal/` bodies at 64 KB (`frontend/default.conf`).
+- `validation` reads `config.settings` when it needs it (`_settings()`), because
+  `signup_fields` imports it and some tests import that before the environment is set. Test
+  helpers re-import it per test (`_PORTAL_MODULES` in `test_portal_local.py`).
+
+### Request signals
+
+`security_signals.py` is **the backend's file, copied unchanged** (`backend/test_security_signals.py`
+fails if they differ; `backend/CLAUDE.md` → Request signals has the detail). `main.py` adds it
+with this app's `auth.client_ip` (rightmost, invariant 3 below), bodies under `/api/sync/` left
+unread, and a 401 under `/api/sync/` reported as `sync_auth_fail` (critical: nothing but the
+scheduler should call it, so a bad signature means something inside the compose network is
+trying). It only watches, except that a request carrying a NUL is a 400.
+
+Findings go to `portal_security_events` (`report_signal`), never with an address in them. The
+heartbeat reports `security_events_rev` (the newest id) and the scheduler pulls new rows from
+`GET /api/sync/security_events?since=&limit=` into its audit log and alert rules. Rows older
+than 7 days are pruned on each pull.
 
 ## Auth invariants
 

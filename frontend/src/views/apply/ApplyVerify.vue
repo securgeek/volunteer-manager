@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Button   from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import { portal_post, APPLY_EMAIL_KEY } from '../../composables/usePortal.js'
+import { TOKEN } from '../../lib/portal_rules.js'
 
 // Mail scanners and link prefetchers GET the link. Rendering this page must therefore do
 // nothing; the token is consumed only by the POST behind the button (portal/CLAUDE.md,
@@ -12,6 +13,9 @@ import { portal_post, APPLY_EMAIL_KEY } from '../../composables/usePortal.js'
 const route    = useRoute()
 const router   = useRouter()
 const token    = typeof route.query.t === 'string' ? route.query.t : ''
+// A link a mail app wrapped or cut can't be a token: say so here instead of sending it (the
+// portal records anything else as an anomaly).
+const damaged  = !!token && !TOKEN.test(token)
 const remember = ref(false)
 const busy     = ref(false)
 const message  = ref('')
@@ -33,7 +37,10 @@ async function confirm() {
 <template>
   <div class="apply-card">
     <h2>Confirm sign-in</h2>
-    <template v-if="token">
+    <p v-if="damaged" class="apply-msg err">
+      This link looks damaged. Copy the whole link from the email, or request a new one.
+    </p>
+    <template v-else-if="token">
       <p>Click below to finish signing in.</p>
       <div class="field" style="flex-direction:row; align-items:center;">
         <Checkbox v-model="remember" inputId="apply-remember" binary />
@@ -43,7 +50,7 @@ async function confirm() {
     </template>
     <p v-else class="apply-msg err">This link is missing its token. Request a new one.</p>
     <p v-if="message" class="apply-msg err">{{ message }}</p>
-    <p v-if="!token || message" class="apply-links">
+    <p v-if="!token || damaged || message" class="apply-links">
       <RouterLink to="/apply/login">Request a new link</RouterLink>
     </p>
   </div>

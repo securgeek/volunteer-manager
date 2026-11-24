@@ -10,6 +10,7 @@ database's public schema is DROPPED.
     TEST_PG_HOST=127.0.0.1 TEST_PG_PORT=55432 TEST_PG_DB=scheduler_test \\
     TEST_PG_USER=scheduler TEST_PG_PASSWORD=test  pytest backend/test_invites.py -v
 """
+import json
 import os
 import sys
 from urllib.parse import parse_qs, urlparse
@@ -23,6 +24,7 @@ if not os.getenv("TEST_PG_HOST"):
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
+import audit  # noqa: E402
 import db as dbm  # noqa: E402
 import portal_sync  # noqa: E402
 
@@ -50,9 +52,9 @@ def app():
 
     from fastapi import FastAPI
     from starlette.middleware.sessions import SessionMiddleware
-    from routers import auth, invites, password_reset, users
+    from routers import audit_log, auth, invites, password_reset, users
     application = FastAPI()
-    for r in (auth, invites, password_reset, users):
+    for r in (auth, invites, password_reset, users, audit_log):
         application.include_router(r.router)
     application.add_middleware(SessionMiddleware, secret_key="test-secret")
 
@@ -85,7 +87,7 @@ def sent(monkeypatch):
     monkeypatch.setattr(portal_sync, "send_admin_mail", fake)
     calls.fake = fake
     from routers import password_reset
-    password_reset._hits.clear()
+    password_reset._requests.clear()
     yield calls
 
 
@@ -345,3 +347,367 @@ def test_organizers_set_anyones_email(app):
                                        data={"user_id": "u-alice"}).status_code == 403
     org.post("/api/users/set_email", data={"user_id": "u-bob", "email": ""})
 
+
+
+# ── failed sign-ins are rate limited ──────────────────────────────────────────
+
+def _login(app, user, password, ip="10.9.0.1"):
+    return _client(app).post("/api/login", data={"username": user, "password": password},
+                             headers={"X-Forwarded-For": ip})
+
+
+def test_five_failures_for_one_user_from_one_address_lock_that_pair(app):
+    for _ in range(5):
+        assert _login(app, "bob", "wrong").status_code == 401
+    r = _login(app, "bob", "bob-password")                     # even the right password
+    assert r.status_code == 429 and 0 < int(r.headers["Retry-After"]) <= 15 * 60
+    assert _login(app, "bob", "bob-password", ip="10.9.0.2").status_code == 200   # elsewhere
+    assert _login(app, "alice", "alice-password").status_code == 200              # others
+
+
+def test_twenty_failures_from_one_address_lock_the_address(app):
+    for i in range(20):
+        assert _login(app, f"nobody{i}", "x", ip="10.9.1.1").status_code == 401
+    assert _login(app, "alice", "alice-password", ip="10.9.1.1").status_code == 429
+    assert _login(app, "alice", "alice-password", ip="10.9.1.2").status_code == 200
+
+
+def test_an_ipv6_64_counts_as_one_address(app):
+    for i in range(20):
+        assert _login(app, f"v6-{i}", "x", ip=f"2001:db8:7:7::{i + 1:x}").status_code == 401
+    assert _login(app, "alice", "alice-password", ip="2001:db8:7:7::ff").status_code == 429
+
+
+def test_a_spread_out_guess_at_one_username_hits_the_ceiling(app):
+    for i in range(30):
+        assert _login(app, "bob", "wrong", ip=f"10.9.2.{i + 1}").status_code == 401
+    assert _login(app, "bob", "bob-password", ip="10.9.3.1").status_code == 429
+
+
+def test_success_clears_the_pair_and_refusals_do_not_count(app):
+    for _ in range(4):
+        _login(app, "bob", "wrong")
+    assert _login(app, "bob", "bob-password").status_code == 200     # clears the 4
+    for _ in range(4):
+        assert _login(app, "bob", "wrong").status_code == 401         # 4 again, not 8
+    assert _login(app, "bob", "wrong").status_code == 401             # the 5th
+    for _ in range(10):
+        assert _login(app, "bob", "wrong").status_code == 429         # refused, not counted
+    assert _login(app, "bob", "bob-password", ip="10.9.0.9").status_code == 200
+
+
+def test_successes_from_one_address_never_lock_it(app):
+    """The venue: every check-in laptop signs in from one public address."""
+    for _ in range(30):
+        assert _login(app, "bob", "bob-password", ip="10.9.4.1").status_code == 200
+
+
+# ── the audit log, end to end through the real routes ─────────────────────────
+
+@pytest.fixture
+def audit_file(tmp_path):
+    """Turn the audit log on, file and table, for one test; return a function that reads the
+    file's records. The table starts empty."""
+    _sql("DELETE FROM audit_events")
+    path = tmp_path / "audit.jsonl"
+    audit.configure(str(path), to_db=True)
+    yield lambda: [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    audit.configure(None)
+
+
+def _audit_rows():
+    """Every audit_events row, oldest first, as dicts, with ts formatted as the file has it."""
+    import psycopg2
+    conn = psycopg2.connect(**dbm._dsn())                 # RealDictCursor: rows are dicts
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT event, severity, source, actor, user_id, ip, method, path, "
+                        "message, data, "
+                        "to_char(ts, 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS ts "
+                        "FROM audit_events ORDER BY id")
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def test_a_hostile_username_cannot_forge_an_audit_line(app, audit_file):
+    forged = "eve\n2026-01-01 00:00:00 - alice(u-alice) from 10.0.0.1: Deleted user 'bob'"
+    r = _client(app).post("/api/login", data={"username": forged, "password": "x"},
+                          headers={"X-Forwarded-For": "203.0.113.9"})
+    assert r.status_code == 401
+    (rec,) = audit_file()
+    assert rec["event"] == "auth.login.fail" and rec["ip"] == "203.0.113.9"
+    assert rec["data"] == {"username": forged.lower(), "reason": "unknown_user"}
+
+
+def test_sign_in_failure_success_and_sign_out_are_audited(app, audit_file):
+    c = _client(app)
+    assert c.post("/api/login", data={"username": "bob", "password": "wrong"}).status_code == 401
+    ok = c.post("/api/login", data={"username": "bob", "password": "bob-password"})
+    assert ok.status_code == 200
+    assert c.get("/api/logout").status_code == 200
+    recs = audit_file()
+    assert [r["event"] for r in recs] == ["auth.login.fail", "auth.login.ok", "auth.logout"]
+    assert recs[0]["data"]["reason"] == "bad_password" and recs[0]["actor"] is None
+    assert recs[1]["actor"] == "bob" and recs[1]["user_id"] == "u-bob"
+    assert recs[2]["actor"] == "bob"
+
+
+def test_throttling_is_audited_once_however_hard_a_client_hammers(app, audit_file):
+    for _ in range(5):
+        _login(app, "bob", "wrong")
+    for _ in range(10):
+        assert _login(app, "bob", "wrong").status_code == 429
+    events = [r["event"] for r in audit_file()]
+    assert events == ["auth.login.fail"] * 5 + ["auth.login.throttled"]
+    assert audit_file()[-1]["data"] == {"username": "bob", "limits": ["user_ip"]}
+
+
+def test_a_password_reset_request_is_audited_without_the_address(app, audit_file, sent):
+    _request_reset(app, "alice")
+    (rec,) = audit_file()
+    assert rec["event"] == "password.reset.request" and rec["data"]["username"] == "alice"
+    assert "@" not in json.dumps(rec)
+
+
+# ── the audit_events table ────────────────────────────────────────────────────
+
+def test_every_audit_line_is_also_a_row_with_the_same_content(app, audit_file):
+    c = _client(app)
+    c.post("/api/login", data={"username": "bob", "password": "wrong"},
+           headers={"X-Forwarded-For": "198.51.100.7"})
+    c.post("/api/login", data={"username": "bob", "password": "bob-password"})
+    lines, rows = audit_file(), _audit_rows()
+    assert len(rows) == len(lines) == 2
+    for line, row in zip(lines, rows):
+        assert row["source"] == "backend"
+        for k in ("event", "severity", "source", "actor", "user_id", "ip", "method", "path", "message",
+                  "data", "ts"):
+            assert row[k] == line[k], k
+    assert rows[0]["ip"] == "198.51.100.7" and rows[0]["data"]["reason"] == "bad_password"
+
+
+def test_a_nul_is_kept_in_the_file_and_replaced_in_the_table(app, audit_file):
+    _client(app).post("/api/login", data={"username": "eve\x00x", "password": "x"})
+    assert audit_file()[0]["data"]["username"] == "eve\x00x"
+    assert _audit_rows()[0]["data"]["username"] == "eve\ufffdx"
+
+
+def test_a_rolled_back_request_still_leaves_its_audit_row(app, audit_file):
+    from starlette.requests import Request
+    req = Request({"type": "http", "method": "POST", "path": "/api/x", "headers": [],
+                   "query_string": b"", "client": ("10.0.0.1", 1)})
+    conn = dbm.get_conn()
+    try:
+        conn.execute("UPDATE users SET failed_login_cnt = 99 WHERE user_id = 'u-bob';")
+        audit.audit("user.role_change", req, None, "Changed a role")
+        conn._conn.rollback()                             # the request fails after auditing
+    finally:
+        dbm.put_conn(conn)
+    assert [r["event"] for r in _audit_rows()] == ["user.role_change"]
+    assert _sql("SELECT failed_login_cnt FROM users WHERE user_id = 'u-bob'")[0][0] != 99
+
+
+def test_prune_keeps_the_retention_window(app, audit_file, monkeypatch):
+    for days in (1, 29, 31, 400):
+        _sql("INSERT INTO audit_events (ts, event, severity, message) VALUES "
+             "((NOW() AT TIME ZONE 'UTC') - make_interval(days => %s), 'auth.logout', 'info', "
+             "%s)", (days, f"{days} days old"))
+
+    def kept():
+        return sorted(r["message"] for r in _audit_rows())
+
+    conn = dbm.get_conn()
+    try:
+        monkeypatch.setenv("AUDIT_RETENTION_DAYS", "0")          # keep everything
+        assert audit.prune(conn) == 0 and len(kept()) == 4
+        monkeypatch.delenv("AUDIT_RETENTION_DAYS")               # default 365
+        assert audit.prune(conn) == 1 and "400 days old" not in kept()
+        monkeypatch.setenv("AUDIT_RETENTION_DAYS", "30")
+        assert audit.prune(conn) == 1
+        assert kept() == ["1 days old", "29 days old"]
+    finally:
+        dbm.put_conn(conn)
+
+
+# ── alerts against the real tables ────────────────────────────────────────────
+
+@pytest.fixture
+def watching(audit_file):
+    """The alert rules watching every audit event, with the table on (audit_file)."""
+    import alerts
+    audit.add_observer(alerts.observe)
+    yield alerts
+    audit.remove_observer(alerts.observe)
+
+
+def test_alerts_go_to_organizers_set_to_get_them_with_an_address(app):
+    import alerts
+    _sql("UPDATE users SET audit_alerts = FALSE")
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE username IN ('alice', 'bob')")
+    _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
+         "('u-carol', 'carol', 'x', 'organizer', 'carol@example.com') ON CONFLICT DO NOTHING")
+    try:
+        # bob is ticked but has no address and isn't an organizer; carol isn't ticked.
+        assert alerts.recipients() == [{"username": "alice", "email": "alice@example.com"}]
+    finally:
+        _sql("DELETE FROM users WHERE user_id = 'u-carol'")
+        _sql("UPDATE users SET audit_alerts = FALSE")
+
+
+def test_a_sign_in_from_a_new_network_alerts_but_the_first_ever_does_not(app, watching):
+    def rules():
+        return [a.rule_id for a in watching._state.unsent]
+    assert _login(app, "bob", "bob-password", ip="10.20.0.1").status_code == 200
+    assert rules() == []                                # no history yet
+    assert _login(app, "bob", "bob-password", ip="10.20.0.77").status_code == 200
+    assert rules() == []                                # same /24
+    assert _login(app, "bob", "bob-password", ip="192.0.2.5").status_code == 200
+    assert rules() == ["login.new_network"]
+    assert _login(app, "bob", "bob-password", ip="192.0.2.6").status_code == 200
+    assert rules() == ["login.new_network"]             # that network is known now
+    (fired,) = [r for r in _audit_rows() if r["event"] == "alert.fired"]
+    assert fired["severity"] == "low" and fired["data"]["rule"] == "login.new_network"
+
+
+def test_a_burst_of_failed_sign_ins_is_an_alert_in_the_table(app, watching):
+    for i in range(10):
+        assert _login(app, f"ghost{i}", "x", ip="203.0.113.50").status_code == 401
+    fired = [r for r in _audit_rows() if r["event"] == "alert.fired"]
+    assert {f["data"]["rule"] for f in fired} == {"login.bruteforce.ip", "login.spray"}
+    assert all(f["severity"] == "high" for f in fired)
+    assert {a.rule_id for a in watching._state.unsent} == {"login.bruteforce.ip", "login.spray"}
+
+
+# ── the Audit Log, and who gets the alerts ────────────────────────────────────
+
+@pytest.fixture
+def holders():
+    """alice (organizer, with an address) gets alerts; dora is a second organizer who doesn't,
+    with no address. Undone after."""
+    from argon2 import PasswordHasher
+    _sql("INSERT INTO users (user_id, username, password_hash, role, email) VALUES "
+         "('u-dora', 'dora', %s, 'organizer', NULL) ON CONFLICT DO NOTHING",
+         (PasswordHasher().hash("dora-password"),))
+    _sql("UPDATE users SET audit_alerts = (user_id = 'u-alice')")
+    from routers import audit_log
+    audit_log._test_alerts.clear()
+    yield
+    _sql("DELETE FROM users WHERE user_id = 'u-dora'")
+    _sql("UPDATE users SET audit_alerts = FALSE, role = CASE user_id WHEN 'u-alice' THEN "
+         "'organizer' WHEN 'u-bob' THEN 'checkin' ELSE role END")
+
+
+def test_every_organizer_reads_the_audit_log_and_no_one_else(app, holders):
+    assert _client(app).get("/api/admin/audit").status_code == 401
+    assert _signed_in(app, "bob").get("/api/admin/audit").status_code == 403     # checkin
+    assert _signed_in(app, "bob").get("/api/admin/audit/status").status_code == 403
+    assert _signed_in(app).get("/api/admin/audit").status_code == 200
+    assert _signed_in(app, "dora").get("/api/admin/audit").status_code == 200    # no alerts
+    assert _signed_in(app, "dora").get("/api/admin/audit/status").status_code == 200
+
+
+def test_listing_filters_and_pages(app, holders, audit_file):
+    for i in range(5):
+        _login(app, f"nobody{i}", "x", ip="10.7.0.1")             # auth.login.fail, low
+    _login(app, "bob", "bob-password", ip="10.7.0.2")             # auth.login.ok, info
+    alice = _signed_in(app)
+    body = alice.get("/api/admin/audit", params={"event": "auth.login.fail"}).json()
+    assert [e["event"] for e in body["events"]] == ["auth.login.fail"] * 5
+    assert body["events"][0]["ts"].endswith("Z") and body["events"][0]["data"]["username"]
+    page = alice.get("/api/admin/audit", params={"event": "auth.", "limit": 3}).json()
+    assert len(page["events"]) == 3 and page["next_before_id"]
+    rest = alice.get("/api/admin/audit", params={"event": "auth.", "limit": 3,
+                                                 "before_id": page["next_before_id"]}).json()
+    assert all(e["id"] < page["next_before_id"] for e in rest["events"])
+    low = alice.get("/api/admin/audit", params={"min_severity": "low"}).json()["events"]
+    assert "auth.login.ok" not in {e["event"] for e in low}
+    by_ip = alice.get("/api/admin/audit", params={"ip": "10.7.0.2"}).json()["events"]
+    assert {e["event"] for e in by_ip} == {"auth.login.ok"}
+
+
+def test_search_text_is_literal_not_a_pattern(app, holders, audit_file):
+    _login(app, "nobody", "x")
+    alice = _signed_in(app)
+    for wild in ("%", "_", "\\"):
+        assert alice.get("/api/admin/audit", params={"q": wild}).json()["events"] == []
+    assert alice.get("/api/admin/audit", params={"q": "invalid LOGIN"}).json()["events"]
+
+
+def test_bad_filters_are_refused(app, holders):
+    alice = _signed_in(app)
+    assert alice.get("/api/admin/audit", params={"min_severity": "urgent"}).status_code == 400
+    assert alice.get("/api/admin/audit", params={"source": "elsewhere"}).status_code == 400
+    assert alice.get("/api/admin/audit", params={"limit": 500}).status_code == 422
+
+
+def test_opening_the_log_is_itself_audited_once_per_visit(app, holders, audit_file):
+    alice = _signed_in(app)
+    first = alice.get("/api/admin/audit", params={"limit": 1}).json()
+    alice.get("/api/admin/audit", params={"limit": 1, "before_id": first["next_before_id"]})
+    views = [r for r in _audit_rows() if r["event"] == "audit.view"]
+    assert len(views) == 1 and views[0]["actor"] == "alice"
+
+
+def test_any_organizer_turns_alerts_on_and_off_for_anyone(app, holders, audit_file):
+    dora = _signed_in(app, "dora")                  # doesn't get alerts herself
+    r = dora.post("/api/users/set_audit_alerts", data={"user_id": "u-bob", "enabled": "1"})
+    assert r.status_code == 400 and "organizers" in r.json()["detail"]        # bob is checkin
+    assert _signed_in(app, "bob").post(
+        "/api/users/set_audit_alerts", data={"user_id": "u-bob", "enabled": "0"}
+    ).status_code == 403                                                        # not an organizer
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-dora", "enabled": "1"}).json()["audit_alerts"] is True
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-alice", "enabled": "0"}).status_code == 200
+    rows = [r for r in _audit_rows() if r["event"] == "user.audit_alerts"]
+    assert [r["data"]["enabled"] for r in rows] == [True, False]
+    assert rows[0]["message"] == "Turned security alerts on for themselves"
+    listed = {u["username"]: u["audit_alerts"] for u in dora.get("/api/users").json()}
+    assert listed["dora"] is True and listed["alice"] is False
+    assert dora.post("/api/users/set_audit_alerts",
+                     data={"user_id": "u-dora", "enabled": "x"}).status_code == 400
+
+
+def test_alerts_can_go_to_nobody_and_the_status_says_so(app, holders):
+    alice = _signed_in(app)
+    r = alice.post("/api/users/set_audit_alerts", data={"user_id": "u-alice", "enabled": "0"})
+    assert r.status_code == 200                                  # the last one: allowed
+    body = alice.get("/api/admin/audit/status").json()
+    assert body["alerted"] == [] and body["recipients"] == 0
+
+
+def test_someone_who_stops_being_an_organizer_stops_getting_alerts(app, holders):
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE user_id = 'u-dora'")
+    dora = _signed_in(app, "dora")
+    assert dora.post("/api/users/set_role",
+                     data={"user_id": "u-alice", "role": "view"}).status_code == 200
+    assert _sql("SELECT audit_alerts FROM users WHERE user_id = 'u-alice'") == [(False,)]
+    dora.post("/api/users/set_role", data={"user_id": "u-alice", "role": "organizer"})
+    assert _sql("SELECT audit_alerts FROM users WHERE user_id = 'u-alice'") == [(False,)]
+
+
+def test_status_says_who_alerts_reach(app, holders):
+    _sql("UPDATE users SET audit_alerts = TRUE WHERE user_id = 'u-dora'")
+    body = _signed_in(app, "dora").get("/api/admin/audit/status").json()
+    assert body["alerted"] == [{"username": "alice", "has_email": True},
+                               {"username": "dora", "has_email": False}]
+    assert body["recipients"] == 1 and body["retention_days"] == 365
+
+
+def test_a_test_alert_is_mailed_and_limited(app, holders, sent, monkeypatch, audit_file):
+    calls = []
+
+    async def send(kind, to, link, **fields):
+        calls.append((kind, to, fields["rule"], fields["title"]))
+        return {"ok": True}
+    monkeypatch.setattr(portal_sync, "send_admin_mail", send)
+    monkeypatch.setattr(portal_sync, "site_origin", lambda: SITE)
+    dora = _signed_in(app, "dora")                  # any organizer can send one
+    r = dora.post("/api/admin/audit/test_alert")
+    assert r.status_code == 200 and r.json() == {"reached": 1, "recipients": 1}
+    assert calls == [("alert", "alice@example.com", "test", "Test alert from the audit log page")]
+    r = dora.post("/api/admin/audit/test_alert")
+    assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0
+    events = [r["event"] for r in _audit_rows()]
+    assert "alert.test" in events and "alert.mailed" in events

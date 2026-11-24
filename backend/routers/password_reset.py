@@ -14,16 +14,15 @@ mailed through the portal (portal_sync.send_admin_mail); it opens /admin/reset?t
 """
 import logging
 import secrets
-import threading
-import time
-from collections import defaultdict, deque
 
 from argon2 import PasswordHasher
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import portal_sync
 from api_auth import rate_key
-from db import PgClient, _session_cache, audit, get_app_kv, get_db
+from audit import audit, client_ip
+from db import PgClient, _session_cache, get_app_kv, get_db
+from ratelimit import SlidingWindow
 from routers.invites import token_hash
 
 router = APIRouter()
@@ -34,29 +33,7 @@ RATE_LIMIT, RATE_WINDOW_SEC = 5, 15 * 60
 GENERIC = ("If that account has an email address on file, a reset link is on its way. "
            "It works once, for an hour.")
 
-_hits: dict = defaultdict(deque)
-_hits_lock = threading.Lock()
-
-
-def _allowed(*keys: str) -> bool:
-    """A sliding window per key; False if any key is over the limit. Counts only if allowed."""
-    now = time.monotonic()
-    with _hits_lock:
-        for k in keys:
-            q = _hits[k]
-            while q and q[0] <= now - RATE_WINDOW_SEC:
-                q.popleft()
-            if len(q) >= RATE_LIMIT:
-                return False
-        for k in keys:
-            _hits[k].append(now)
-    return True
-
-
-def _client_ip(request: Request) -> str:
-    # nginx sends a single resolved X-Forwarded-For (frontend/CLAUDE.md → Reverse proxy).
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
+_requests = SlidingWindow(RATE_LIMIT, RATE_WINDOW_SEC)
 
 
 # A reset link is live while unused and unexpired. Each query below spells that out,
@@ -78,14 +55,16 @@ async def request_reset(request: Request, username: str = Form(...),
         HTTPException 429: Too many requests for this username or from this address.
     """
     username = username.lower().strip()
-    ip = _client_ip(request)
-    if not _allowed(f"u:{username}", f"ip:{rate_key(ip)}"):
+    ip = client_ip(request)
+    if not _requests.allow(f"u:{username}", f"ip:{rate_key(ip)}"):
         raise HTTPException(status_code=429, detail="Too many reset requests. Try again later.")
     row = db.execute("SELECT user_id, email FROM users WHERE username = ?;",
                      (username,)).fetchone()
     if not row or not row["email"]:
-        audit(request, None, f"Password reset requested for {username!r}: "
-                             f"{'no email on file' if row else 'no such user'}")
+        audit("password.reset.request", request, None,
+              f"Password reset requested for {username!r}: "
+              f"{'no email on file' if row else 'no such user'}",
+              username=username, reason="no_email" if row else "unknown_user")
         return {"ok": True, "detail": GENERIC}
 
     site = portal_sync.site_origin()
@@ -99,12 +78,14 @@ async def request_reset(request: Request, username: str = Form(...),
         await portal_sync.send_admin_mail(
             "reset", row["email"], f"{site}/admin/reset?t={token}", username=username,
             app_title=get_app_kv(db, "app_title") or "the conference", minutes=RESET_MINUTES)
-        audit(request, None, f"Password reset link sent for {username!r}")
+        audit("password.reset.request", request, None, f"Password reset link sent for {username!r}",
+              username=username, reason="sent")
     # Deliberately broad: the reply never varies (GENERIC), so no failure may reach the
     # caller. It goes to the log and the audit trail instead.
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         log.error("password reset mail for %r failed: %s", username, exc)
-        audit(request, None, f"Password reset for {username!r}: mail failed")
+        audit("password.reset.mail_fail", request, None,
+              f"Password reset for {username!r}: mail failed", username=username)
     return {"ok": True, "detail": GENERIC}
 
 
@@ -165,6 +146,8 @@ def complete_reset(request: Request, t: str = Form(...), password: str = Form(..
     for sid in sids:
         _session_cache.pop(sid, None)
     name = db.execute("SELECT username FROM users WHERE user_id = ?;", (user_id,)).fetchone()
-    audit(request, None, f"Password reset completed for {name['username'] if name else user_id!r}; "
-                         f"{len(sids)} session(s) ended")
+    audit("password.reset.complete", request, None,
+          f"Password reset completed for {name['username'] if name else user_id!r}; "
+          f"{len(sids)} session(s) ended",
+          user_id_reset=user_id)
     return {"ok": True}

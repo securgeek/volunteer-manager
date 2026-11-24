@@ -111,12 +111,17 @@ class FakePortal:
         self.calls = []
         self.pull = []          # volunteers the next GET /api/sync/volunteers returns
         self.config = {"portal_signup_open": "0"}
+        self.security_events = []   # what GET /api/sync/security_events serves, by id
 
     async def __call__(self, method, path, payload=None):
         self.calls.append((method, path, payload))
         if method == "GET" and path.startswith("/api/sync/volunteers"):
             rows, self.pull = self.pull, []
             return {"volunteers": rows, "cursor": 100, "more": False}
+        if method == "GET" and path.startswith("/api/sync/security_events"):
+            since = int(path.split("since=")[1].split("&")[0])
+            rows = [e for e in self.security_events if e["id"] > since][:500]
+            return {"events": rows, "next": rows[-1]["id"] if rows else since}
         if method == "GET" and path == "/api/sync/config":
             return {"settings": dict(self.config)}
         if method == "POST" and path == "/api/sync/settings":
@@ -738,7 +743,9 @@ def paced(monkeypatch):
 
 def test_send_makes_an_invite_pushes_it_then_mails_it(app, org, portal, paced, monkeypatch):
     lines = []
-    monkeypatch.setattr(paced, "audit", lambda req, sid, action, who=None: lines.append(action))
+    monkeypatch.setattr(paced, "audit",
+                        lambda event, req, sid, action, who=None, **data:
+                        lines.append(f"{action} {who} {data}"))
     r = org.post("/api/admin/portal/invites/send",
                  data={"name": "Grace Hopper", "email": "Grace@Example.org", "days": "7"})
     assert r.status_code == 200, r.text
@@ -894,3 +901,59 @@ def test_purge_is_for_organizers_only(app):
     c = TestClient(app, base_url="https://scheduler.test")
     assert c.post("/api/admin/volunteers/purge",
                   data={"vol_ids": ["x"], "confirm": "x"}).status_code == 401
+
+
+# ── the portal's security events ──────────────────────────────────────────────
+
+def _sec_event(i, **over):
+    e = {"id": i, "ts": "2026-11-23T10:00:00.000Z", "event": "security.attack_signature",
+         "severity": "high", "ip": "203.0.113.9", "method": "POST",
+         "path": "/api/portal/signup/check_email", "message": "Attack patterns in a request",
+         "data": {"rules": ["sql_union"], "where": "form:email", "held_back": 0}}
+    e.update(over)
+    return e
+
+
+@pytest.fixture
+def audit_on(tmp_path):
+    """The audit log on (file and table) with the alert rules watching."""
+    import alerts
+    import audit
+    _sql("DELETE FROM audit_events")
+    audit.configure(str(tmp_path / "audit.jsonl"), to_db=True)
+    audit.add_observer(alerts.observe)
+    yield alerts
+    audit.remove_observer(alerts.observe)
+    audit.configure(None)
+
+
+def test_portal_security_events_become_audit_events_and_alerts(app, portal, audit_on):
+    portal.security_events = [_sec_event(1), _sec_event(2, ip="198.51.100.4"),
+                              _sec_event(3, event="security.sync_auth_fail",
+                                         severity="critical", path="/api/sync/heartbeat")]
+    assert asyncio.run(portal_sync.pull_security_events(_conn())) == 3
+    rows = _sql("SELECT source, event, severity, ip FROM audit_events "
+                "WHERE event LIKE %s ORDER BY id", ("security.%",))
+    assert rows == [("portal", "security.attack_signature", "high", "203.0.113.9"),
+                    ("portal", "security.attack_signature", "high", "198.51.100.4"),
+                    ("portal", "security.sync_auth_fail", "critical", "203.0.113.9")]
+    assert sorted(a.rule_id for a in audit_on._state.unsent) == [
+        "security.attack", "security.attack", "security.sync_auth"]
+    # The cursor moved: the next pull asks for what's after 3, and takes nothing again.
+    portal.calls.clear()
+    assert asyncio.run(portal_sync.pull_security_events(_conn())) == 0
+    assert any("since=3" in p for _, p, _ in portal.calls)
+
+
+def test_a_malformed_portal_event_is_dropped(app, portal, audit_on):
+    portal.security_events = [_sec_event(1, ts="yesterday"), _sec_event(2, data="x"),
+                              _sec_event(3, event=None), _sec_event(4, severity="apocalyptic")]
+    assert asyncio.run(portal_sync.pull_security_events(_conn())) == 1
+    (row,) = _sql("SELECT severity FROM audit_events WHERE source = 'portal'")
+    assert row == ("high",)          # an unknown severity falls back to the registry's
+
+
+def test_a_portal_without_security_events_is_never_asked(app, portal):
+    status = asyncio.run(portal_sync._sync_once(_conn()))     # heartbeat has no rev
+    assert status["ok"], status
+    assert not any("security_events" in p for _, p, _ in portal.calls)

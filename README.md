@@ -4,7 +4,7 @@ This application was designed to aid the Volunteer Organizer Team to track a lar
 volunteers. It includes features for most of the volunteer lifecycle, from scheduling,
 volunteer applications, shift management, and volunteer check-in.
 
-It was built for [BSides Charm](https://bsidescharm.org/)'s volunteer program, and is meant to
+It was built for [BSidesCharm](https://bsidescharm.org/)'s volunteer program, and is meant to
 be reusable: the conference's name, logos, contact details, landing page, signup questions and
 emails are all set from the admin site, not in the code.
 
@@ -22,6 +22,10 @@ emails are all set from the admin site, not in the code.
   - check-in by scanning those codes, radio checkout, and notes and ratings;
   - passkey or password sign-in, with roles for the check-in desk and read-only users.
 - **Export API:** read-only, scoped bearer keys for other servers.
+- **Audit log and security alerts:** every sign-in, change and refusal is recorded, and
+  searchable in the organizer app. Attack patterns, sign-in floods, account changes and
+  input the volunteer pages could never send are emailed to the organizers who can read the
+  log, at most once an hour per cause.
 - **Privacy by design:** volunteers' email addresses are stored only encrypted, to a key the
   organizers hold offline. The internet-facing portal is a separate application with its own
   database, and can't read them.

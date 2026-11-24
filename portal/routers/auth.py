@@ -22,10 +22,12 @@ import clock
 import db
 import ratelimit
 import security
+import validation
 from config import settings
 from mailer import Mailer
 
-router = APIRouter()
+# Every route here is held to validation.py's strict rules.
+router = APIRouter(dependencies=[Depends(validation.strict_request)])
 
 COOKIE_NAME = "portal_sid"
 COOKIE_PATH = "/api/portal"
@@ -49,6 +51,10 @@ def _client_ip(request: Request) -> str:
     if fwd:
         return fwd.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
+
+
+# The same, under a public name, for main.py's SecuritySignals middleware.
+client_ip = _client_ip
 
 
 def _ua(request: Request) -> str:
@@ -189,6 +195,10 @@ async def request_link(request: Request, email: str = Form(...),
     """
     started = time.monotonic()
     ip, ua = _client_ip(request), _ua(request)
+    _clean, problem = validation.check("email", email, required=True)
+    if problem and problem[0] == "anomaly":
+        # Report mode carries on exactly as before: the address is simply not found.
+        validation.anomaly(problem[1], "email")
     addr_hash = security.email_hmac(settings.email_hmac_key, email)
 
     if not ratelimit.check(conn, "request_link", ip, addr_hash,
@@ -242,6 +252,8 @@ def verify_page(t: str = ""):
         t: The token from the link. Not consumed here.
     """
     token_ok = bool(_TOKEN_SHAPE.match(t or ""))
+    if t and not token_ok:
+        validation.anomaly("token", "t")
     # Escaped as well, though the shape check already rules out every special character.
     safe_t = html.escape(t, quote=True) if token_ok else ""
     body = f"""<!doctype html>
@@ -287,6 +299,8 @@ def verify(request: Request, response: Response, t: str = Form(...),
         conn: The database connection.
     """
     ip, ua = _client_ip(request), _ua(request)
+    if not validation.TOKEN.match(t):
+        validation.anomaly("token", "t")
     token_hash = security.hash_secret(t)
 
     cur = conn.execute(

@@ -27,6 +27,7 @@ from typing import Iterator, Optional
 # columns). Set it to False when the release is tagged (docs/operations/releasing.md).
 SCHEMA_RELEASES = (
     ("1.0", 7, None, False),
+    ("1.1", 8, "1.1.sql", True),        # portal_security_events
 )
 BASELINE_VERSION = SCHEMA_RELEASES[0][1]
 PORTAL_SCHEMA_VERSION = SCHEMA_RELEASES[-1][1]

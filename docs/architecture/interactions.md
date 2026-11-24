@@ -19,6 +19,7 @@ tables and columns.
 | 11 | [An early-access invite](#11-an-early-access-invite) | `routers/portal_admin.py` invites, `signup_invites` on either side |
 | 12 | [Purging a volunteer](#12-purging-a-volunteer) | `purge_volunteers` on either side, any table holding a `vol_id` |
 | 13 | [Passkey sign-in](#13-passkey-sign-in) | `routers/passkeys.py`, `auth.start_session`, `lib/passkey.js` |
+| 14 | [From a hostile request to an alert](#14-from-a-hostile-request-to-an-alert) | `security_signals.py`, `portal/validation.py`, `audit.py`, `alerts.py` |
 
 The diagrams are Mermaid. They render on this site, on GitHub, and in VS Code's Markdown
 preview with a Mermaid extension. If a diagram and the code disagree, the code is right:
@@ -472,8 +473,9 @@ code already mailed.
 ## 9. Admin invite and reset mail
 
 The scheduler has no mail path of its own. It asks the portal, through the one narrow
-endpoint that mails an address the portal didn't verify itself. That endpoint takes three
-kinds: `invite` and `reset` (drawn here) and `signup_invite` (diagram 11).
+endpoint that mails an address the portal didn't verify itself. That endpoint takes four
+kinds: `invite` and `reset` (drawn here), `signup_invite` (diagram 11) and `alert`
+(diagram 14).
 
 ```mermaid
 sequenceDiagram
@@ -706,3 +708,53 @@ captured response is good for nothing. A passkey removed from the account still 
 device, which keeps offering it; that's the 401 that says to use the password. Adding a
 passkey (`register/options`) needs the current password, so a stolen session cookie can't
 plant one.
+
+---
+
+## 14. From a hostile request to an alert
+
+A request to the volunteer portal that looks like an attack, or that the volunteer pages
+could never have sent, is noticed on the portal, pulled into the scheduler's audit log on
+the next sync tick, and mailed as an alert. A finding on the organizer site takes the same
+path from `audit()` on, without the pull. Nothing here blocks the request, except a NUL, or
+an anomaly with `PORTAL_STRICT=enforce`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor X as Client
+    participant SS as portal security_signals.SecuritySignals
+    participant V as portal validation.py
+    participant SQ as portal.db portal_security_events
+    participant L as portal_sync loop
+    participant AU as audit.ingest / audit()
+    participant AL as alerts.observe
+    participant PG as Postgres audit_events
+    participant W as alerts worker
+    participant P as portal send_admin_mail (kind alert)
+    actor O as Organizers with audit_alerts
+
+    X->>SS: POST /api/portal/signup/submit
+    SS->>SS: signatures, scanner, probe path, NUL (400), cross-site
+    SS->>V: the route runs
+    V->>V: strict rules: unknown key, wrong type, name_chars, ...
+    alt an anomaly
+        V->>SQ: portal.anomaly {rule, where, mode, held_back} (≤ 1/min per client+rule+path)
+        Note right of V: enforce: 400 Malformed request<br/>report: the old forgiving path
+    end
+    SS->>SS: score the response status, once per hour per client
+    SS->>SQ: security.attack_signature / suspicious_client / sync_auth_fail
+    L->>P: GET /api/sync/heartbeat → security_events_rev
+    L->>SQ: GET /api/sync/security_events?since=cursor
+    L->>AU: ingest(event, "portal"): checked as untrusted
+    AU->>AU: logs/audit.jsonl (json.dumps, ensure_ascii)
+    AU->>AL: observe(record)
+    AL->>AL: rule by address, cooldown 1 h, held_back counted
+    AL->>AU: audit("alert.fired", severity of the rule)
+    AU->>PG: INSERT (own connection, own commit), source portal
+    AL->>W: queue (≤ 15 mailed an hour)
+    W->>P: one per recipient: rule, title, facts (defanged by the portal)
+    P->>O: [title] Security alert, link {ADMIN_PUBLIC_URL}/admin/audit
+    W->>AU: alert.mailed (a count) or alert.mail_fail (by username)
+    Note over AL,W: flush_held_back every 10 min: a "(continued)" alert<br/>for a cooled-down rule with events held back
+```

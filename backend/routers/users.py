@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse, Response
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
-from db import get_db, get_session_data, RoleChecker, audit, PgClient
+from audit import audit
+from db import get_db, get_session_data, RoleChecker, PgClient
 
 router = APIRouter()
 
@@ -20,13 +21,23 @@ router = APIRouter()
 # (routers/passkeys.py). The two statements share their column list; keep them in step.
 _LIST_USERS_SQL = (
     "SELECT user_id, username, role, email, created_at, last_login_at, failed_login_cnt, "
+    "audit_alerts, "
     "(SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = users.user_id) AS passkey_count "
     "FROM users ORDER BY username;"
 )
 _GET_USER_SQL = (
     "SELECT user_id, username, role, email, created_at, last_login_at, failed_login_cnt, "
+    "audit_alerts, "
     "(SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = users.user_id) AS passkey_count "
     "FROM users WHERE user_id = ?;"
+)
+
+
+# Organizers only get security alerts (alerts.py); someone who stops being one stops getting
+# them, in the same statement as the role change.
+_SET_ROLE_SQL = (
+    "UPDATE users SET role = ?, audit_alerts = (audit_alerts AND ? = 'organizer'), "
+    "updated_at = NOW() WHERE user_id = ?;"
 )
 
 
@@ -95,7 +106,8 @@ def add_user(
         (user_id, username, ph.hash(password), role)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Added user {username!r} with role {role!r}")
+    audit("user.create", request, request.session.get("session_id"),
+          f"Added user {username!r} with role {role!r}", target=username, role=role)
     return JSONResponse(status_code=201, content=jsonable_encoder(db.execute(
         _GET_USER_SQL, (user_id,)
     ).fetchone()))
@@ -132,12 +144,10 @@ def set_user_role(
         raise HTTPException(status_code=400, detail="Invalid role")
     if not db.execute("SELECT 1 FROM users WHERE user_id = ?;", (user_id,)).fetchone():
         raise HTTPException(status_code=404, detail="User not found")
-    db.execute(
-        "UPDATE users SET role = ?, updated_at = NOW() WHERE user_id = ?;",
-        (role, user_id)
-    )
+    db.execute(_SET_ROLE_SQL, (role, role, user_id))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Set role of {user_id!r} to {role!r}")
+    audit("user.role_change", request, request.session.get("session_id"),
+          f"Set role of {user_id!r} to {role!r}", target_user_id=user_id, role=role)
     return {"ok": True}
 
 
@@ -177,7 +187,8 @@ def set_user_password(
         (ph.hash(password), user_id)
     )
     db.commit()
-    audit(request, request.session.get("session_id"), f"Reset password for user {user_id!r}")
+    audit("password.reset.by_admin", request, request.session.get("session_id"),
+          f"Reset password for user {user_id!r}", target_user_id=user_id)
     return {"ok": True}
 
 
@@ -210,7 +221,8 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     db.execute("DELETE FROM users WHERE user_id = ?;", (user_id,))
     db.commit()
-    audit(request, request.session.get("session_id"), f"Deleted user {user_id!r}")
+    audit("user.delete", request, request.session.get("session_id"), f"Deleted user {user_id!r}",
+          target_user_id=user_id)
     return Response(status_code=204)
 
 
@@ -249,7 +261,7 @@ def change_own_password(
     try:
         ph.verify(row["password_hash"], current_password)
     except (VerificationError, InvalidHashError):
-        audit(request, request.session.get("session_id"),
+        audit("password.change.fail", request, request.session.get("session_id"),
               "Password change refused: wrong current password")
         raise HTTPException(status_code=403, detail="Current password is incorrect") from None
     if len(new_password) < 8:
@@ -259,7 +271,7 @@ def change_own_password(
         "updated_at = NOW(), failed_login_cnt = 0 WHERE user_id = ?;",
         (ph.hash(new_password), s_data["user_id"]))
     db.commit()
-    audit(request, request.session.get("session_id"), "Changed own password")
+    audit("password.change", request, request.session.get("session_id"), "Changed own password")
     return {"ok": True}
 
 
@@ -289,8 +301,9 @@ def set_user_email(
     db.commit()
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="User not found")
-    audit(request, request.session.get("session_id"),
-          f"{'Set' if address else 'Cleared'} email for user {user_id!r}")
+    audit("user.email_set", request, request.session.get("session_id"),
+          f"{'Set' if address else 'Cleared'} email for user {user_id!r}",
+          target_user_id=user_id)
     return {"ok": True, "email": address}
 
 
@@ -344,12 +357,58 @@ def change_own_email(
     try:
         PasswordHasher().verify(row["password_hash"], current_password)
     except (VerificationError, InvalidHashError, TypeError):
-        audit(request, request.session.get("session_id"),
+        audit("user.email_change.fail", request, request.session.get("session_id"),
               "Email change refused: wrong current password")
         raise HTTPException(status_code=403, detail="Current password is incorrect") from None
     db.execute("UPDATE users SET email = ?, updated_at = NOW() WHERE user_id = ?;",
                (address, s_data["user_id"]))
     db.commit()
-    audit(request, request.session.get("session_id"),
+    audit("user.email_change", request, request.session.get("session_id"),
           "Set own email" if address else "Cleared own email")
     return {"ok": True, "email": address}
+
+
+@router.post("/api/users/set_audit_alerts")
+def set_audit_alerts(
+    request: Request,
+    user_id: str = Form(...),
+    enabled: str = Form(...),
+    s_data: dict = Depends(RoleChecker("organizer")),
+    db: PgClient = Depends(get_db),
+):
+    """Turn security alert emails on or off for an organizer (alerts.py sends them).
+
+    Any organizer may change anyone's. Only organizers can have them on; it may be nobody,
+    and the Audit Log then says so in red. Every change is audited, and raises an alert.
+
+    Args:
+        request: The request, for the audit log.
+        user_id: The user to change.
+        enabled: `1` to send them alerts, `0` to stop.
+        s_data: The caller's session; organizers only.
+        db: The request's database connection.
+
+    Returns:
+        `{"ok": True, "audit_alerts": bool}`.
+
+    Raises:
+        HTTPException 400: `enabled` isn't 0 or 1, or turning alerts on for a non-organizer.
+        HTTPException 404: No such user.
+    """
+    if enabled not in ("0", "1"):
+        raise HTTPException(status_code=400, detail="enabled must be 0 or 1")
+    target = db.execute("SELECT username, role FROM users WHERE user_id = ?;",
+                        (user_id,)).fetchone()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if enabled == "1" and target["role"] != "organizer":
+        raise HTTPException(status_code=400,
+                            detail="Only organizers can get security alerts.")
+    db.execute("UPDATE users SET audit_alerts = ?, updated_at = NOW() WHERE user_id = ?;",
+               (enabled == "1", user_id))
+    db.commit()
+    who = "themselves" if user_id == s_data["user_id"] else repr(target["username"])
+    audit("user.audit_alerts", request, request.session.get("session_id"),
+          f"Turned security alerts {'on' if enabled == '1' else 'off'} for {who}",
+          target=target["username"], target_user_id=user_id, enabled=enabled == "1")
+    return {"ok": True, "audit_alerts": enabled == "1"}

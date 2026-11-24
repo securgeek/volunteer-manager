@@ -102,7 +102,36 @@ volunteer, their slots become empty, and radio history keeps the name.
 
 ## Logs
 
-`logs/audit.log` records every write and sign-in, with the username and client address.
+`logs/audit.jsonl` records every write, sign-in, sign-out and refusal, one JSON object per
+line: the time in UTC, an event code such as `auth.login.fail`, its severity, who did it, the
+client address, the request path, a message, and structured details. Read it with `jq`:
+
+```bash
+jq -c 'select(.event == "auth.login.fail")' logs/audit.jsonl          # failed sign-ins
+jq -c 'select(.severity == "high" or .severity == "medium")' logs/audit.jsonl
+jq -r '.ip' logs/audit.jsonl | sort | uniq -c | sort -rn | head        # busiest addresses
+```
+
+Each event is also a row in the `audit_events` table, which the admin site's Audit Log reads.
+The table keeps `AUDIT_RETENTION_DAYS` (365 by default); the file keeps everything.
+
+The list of event codes and their severities is `EVENTS` in `backend/audit.py`.
+
+**Security alerts** (`backend/alerts.py`) watch those events: bursts of failed sign-ins, a
+password spray, account and role changes, credential changes made by someone else, a new
+email key or export key, refused export calls, and sign-ins or key use from a new network.
+Requests to both the backend and the portal are also
+watched for attack patterns (SQL or script injection, path traversal, scanner tools, the
+paths scanners try) and for clients piling up refused or malformed requests. The portal's
+findings come to the backend's audit log over the sync API. Nothing is blocked; a request
+carrying a NUL character is the one refused, as no browser sends one.
+
+A fired alert is recorded as `alert.fired` and emailed, through the portal, to organizers
+ticked for **Security alerts** in Admin → Users who have an address on their account. Every
+organizer can read the log itself (Admin → Audit Log). Each kind fires at most once an hour
+for the same cause, and at most 15 alerts are mailed an hour in all. The old
+free-text `logs/audit.log` (before release 1.1) is left as it was and no longer written.
+
 Successful healthchecks are left out of the access log, and a healthy, idle backend logs
 nothing. A sync problem is logged once as a warning, and recovery as one
 `portal sync healthy` line.

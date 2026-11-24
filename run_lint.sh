@@ -6,7 +6,8 @@
 # one pylint process would resolve imports against whichever it saw first.
 #
 #   ./run_lint.sh                 # everything
-#   ./run_lint.sh --no-docs       # skip the MkDocs build (also --no-pylint, --no-bandit)
+#   ./run_lint.sh --no-docs       # skip the MkDocs build (also --no-pylint, --no-bandit,
+#                                 # --no-node)
 #   ./run_lint.sh --todo          # also list TODO/FIXME comments (never fails)
 #   ./run_lint.sh -- --disable=C  # anything after -- goes to every pylint run
 #
@@ -15,6 +16,8 @@
 #   - a pylint score below the app's ratchet in APPS below
 #   - any bandit finding at medium severity and medium confidence or above
 #   - any warning from `mkdocs build --strict` (a broken docstring, reference or link)
+#   - the volunteer pages' input rules disagreeing with the portal's (node --test on
+#     frontend/src/lib/portal_rules.test.js; skipped, with a warning, if node isn't installed)
 #
 # Needs requirements-dev.txt, plus backend/requirements.txt for the docs build.
 
@@ -22,13 +25,14 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PYTHON="${PYTHON:-python3}"
-DO_PYLINT=1 DO_BANDIT=1 DO_DOCS=1 DO_TODO=0
+DO_PYLINT=1 DO_BANDIT=1 DO_DOCS=1 DO_TODO=0 DO_NODE=1
 PYLINT_EXTRA=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --no-pylint) DO_PYLINT=0 ;;
         --no-bandit) DO_BANDIT=0 ;;
         --no-docs)   DO_DOCS=0 ;;
+        --no-node)   DO_NODE=0 ;;
         --todo)      DO_TODO=1 ;;
         --) shift; PYLINT_EXTRA=("$@"); break ;;
         *) echo "unknown option: $1 (see the header of $0)" >&2; exit 2 ;;
@@ -40,11 +44,13 @@ done
 # Import roots are what the app's code finds on sys.path, first match wins; they become
 # pylint's --source-roots and PYTHONPATH. Backend tests also reach into portal/ (security.py),
 # so portal comes after backend there: `db` and `main` still resolve to backend's.
-# Ratchets are the score rounded down (raised 2026-11-18, after the security-tier cleanup).
+# Ratchets are the score rounded down (raised 2026-11-18, after the security-tier cleanup;
+# backend code to 8.9 on 2026-11-23, with the structured audit log; backend and portal code
+# to 9.0 the same day, with alerts).
 # Raise them as the code is cleaned up; never lower them to get a change through.
 APPS=(
-    "portal|portal|portal|portal|8.9|9.8"
-    "backend|backend|backend|backend,portal|8.8|9.7"
+    "portal|portal|portal|portal|9.0|9.8"
+    "backend|backend|backend|backend,portal|9.0|9.7"
     "mailrelay|mailrelay|mailrelay|mailrelay|8.8|9.7"
     "vol_mail|tools/vol_mail|tools/vol_mail,backend|tools/vol_mail,backend|8.6|9.3"
 )
@@ -142,6 +148,22 @@ done
 section "repo root"
 [ "$DO_PYLINT" -eq 1 ] && run_pylint "conftest.py" "." 0 --disable="$TEST_DISABLE" --files conftest.py
 [ "$DO_BANDIT" -eq 1 ] && run_bandit "conftest.py" --skip B101 --files conftest.py
+
+# The browser's copy of the portal's input rules, against the cases the portal's tests run
+# (portal/test_data/validation_cases.json). Node's own test runner: no packages needed.
+if [ "$DO_NODE" -eq 1 ]; then
+    section "frontend"
+    if command -v node >/dev/null 2>&1; then
+        echo "• node --test portal_rules"
+        if ! (cd frontend && node --test src/lib/portal_rules.test.js >/dev/null); then
+            (cd frontend && node --test src/lib/portal_rules.test.js 2>&1 | grep -E "^not ok|# (pass|fail)")
+            echo "✗ frontend input rules disagree with the portal's"
+            FAILED=1
+        fi
+    else
+        echo "! node isn't installed: the frontend input rules weren't checked"
+    fi
+fi
 
 if [ "$DO_DOCS" -eq 1 ]; then
     section "docs"

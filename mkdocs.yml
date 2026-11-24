@@ -1,4 +1,4 @@
-site_name: BSides Charm Volunteer Scheduler
+site_name: Volunteer Manager
 site_description: Developer, operator and organizer documentation, and the export API reference
 site_dir: site
 docs_dir: docs

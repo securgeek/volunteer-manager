@@ -8,12 +8,15 @@ Run with a single worker. SQLite has one writer, so a second worker would only m
 SQLITE_BUSY for no gain.
 """
 import argparse
+import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
+import clock
 import db
+import security_signals
 from config import settings
 from routers import auth, branding, signup, sync
 
@@ -67,6 +70,44 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="BSides Volunteer Portal", docs_url=None, redoc_url=None,
               lifespan=lifespan)
+
+_SIGNAL_EVENTS = {
+    "attack_signature": ("security.attack_signature", "Attack patterns in a request"),
+    "suspicious_client": ("security.suspicious_client",
+                          "Unusual run of refused or malformed requests from one client"),
+    "sync_auth_fail": ("security.sync_auth_fail", "Bad signature on the sync API"),
+}
+_INSERT_SECURITY_EVENT_SQL = (
+    "INSERT INTO portal_security_events (ts, event, severity, ip, method, path, message, data) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+
+
+def report_signal(kind: str, request: Request, data: dict) -> None:
+    """Store a SecuritySignals finding for the scheduler to pull (GET
+    /api/sync/security_events), where it becomes an audit event and may raise an alert.
+
+    Args:
+        kind: A key of security_signals.SEVERITY.
+        request: The request that produced it.
+        data: The finding's details. Never an address: the middleware doesn't read any.
+    """
+    event, message = _SIGNAL_EVENTS[kind]
+    conn = db.connect(settings.db_path)
+    try:
+        conn.execute(_INSERT_SECURITY_EVENT_SQL, (
+            clock.now_iso(), event, security_signals.SEVERITY[kind], auth.client_ip(request),
+            request.method, request.url.path[:2000], message, json.dumps(data)))
+    finally:
+        conn.close()
+
+
+app.add_middleware(
+    security_signals.SecuritySignals,
+    report=report_signal, client_ip=auth.client_ip, api_prefix="/api/",
+    skip_paths=("/api/health",), no_body_prefixes=("/api/sync/",),
+    critical_prefix="/api/sync/",
+    allowed_origins=(settings.base_url, settings.admin_url),
+)
 app.include_router(auth.router)
 app.include_router(sync.router)
 app.include_router(branding.router)

@@ -176,6 +176,46 @@ Scanning a radio someone else holds hands it over. To return radios, press **Che
 scan each one.
 The tab lists what's out, what's available, and the full log.
 
+## Security alerts
+
+The site watches its own audit log and emails a **security alert** when something looks
+wrong or important, for example:
+
+- many failed sign-ins from one address, or for one account
+- someone trying lots of different usernames
+- an account created, or its role changed
+- another person's password, passkeys or reset address changed
+- the volunteer email key replaced, or an export API key created
+- an organizer signing in from a network they haven't used in the last 30 days
+- requests to the organizer site or the volunteer pages that look like an attack (SQL or
+  script injection, scanning tools), or one address piling up errors
+- input to the volunteer pages that the pages themselves would never send, such as a name
+  with digits or a field the form doesn't have. Someone is calling the portal directly.
+
+Alerts go to the organizers ticked under **Security alerts** in **Admin → Users** who have
+an email address in **Profile**. At first that's only the first organizer account; any
+organizer can tick or untick anyone. If nobody qualifies, alerts are still recorded but not
+sent, and the Users and Audit Log screens say so in red. Each alert links to the audit log.
+
+One kind of alert comes at most once an hour for the same cause. Anything more in that hour
+is counted and sent as a "(continued)" summary when the hour is up, so a sustained attack is
+a trickle of mail, not a flood, and nothing goes unreported because it stopped.
+
+Treat what's in an alert as untrusted. Details such as a username can be whatever the
+attacker typed, and anything that looked like a link has been broken on purpose. Open the
+site yourself rather than following anything in the details.
+
+## The audit log
+
+**Admin → Audit Log** (for every organizer) lists everything the site has recorded, newest
+first: sign-ins and failed attempts, account and role changes, schedule
+and volunteer changes, export API calls, attack patterns noticed in requests, and every
+alert. Filter by kind of event, severity, who, address, which site, or words in the message,
+and open a row to see its details. Alert emails link straight here.
+
+The card at the top shows who alerts reach, and warns if that's nobody. **Send test alert** emails everyone there now,
+to check the mail path end to end.
+
 ## Your own account
 
 **Profile**, under your name in the top right, changes your own password and email. Both
@@ -185,3 +225,9 @@ without a password.
 If you forget your password, **Send Reset Link** on the sign-in page mails a link to the
 address on your account. An organizer can also set a new password for you under
 **Admin → Users**.
+
+After **5 wrong passwords in 15 minutes**, the sign-in page stops accepting that username
+from your network for a while and says how long to wait. Waiting more is the only fix; more
+attempts don't help. A passkey or a reset link still works in the meantime, and so does
+signing in from another network. Successful sign-ins never count, so a check-in desk full of
+laptops on the venue's network can't lock itself out.

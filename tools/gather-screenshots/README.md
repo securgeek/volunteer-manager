@@ -13,10 +13,10 @@ A full run takes a few minutes, most of it the first image build.
 
 ## What it needs
 
-podman with podman-compose, rsync, openssl, curl, Node 18+ with npm, and Chromium or Chrome.
+podman with podman-compose, rsync, openssl, curl, Node 22.12+ with npm, and Chromium or Chrome.
 It looks for the browser in the usual Linux and macOS places; set `CHROME=/path/to/browser`
-otherwise. The first run installs `puppeteer-core` here (`npm ci`); it drives the browser
-you have and downloads none.
+otherwise. The first run installs `puppeteer-core` here (`npm ci`), and so does the next run
+after `package-lock.json` changes; it drives the browser you have and downloads none.
 
 ## What it does
 
