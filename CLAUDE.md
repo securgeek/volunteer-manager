@@ -1,4 +1,4 @@
-# BSidesCharm Volunteer Scheduler
+# Volunteer Manager
 
 ## Project layout
 

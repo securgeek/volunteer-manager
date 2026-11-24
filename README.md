@@ -4,7 +4,7 @@ This application was designed to aid the Volunteer Organizer Team to track a lar
 volunteers. It includes features for most of the volunteer lifecycle, from scheduling,
 volunteer applications, shift management, and volunteer check-in.
 
-It was built for [BSides Charm](https://bsidescharm.org/)'s volunteer program, and is meant to
+It was built for [BSidesCharm](https://bsidescharm.org/)'s volunteer program, and is meant to
 be reusable: the conference's name, logos, contact details, landing page, signup questions and
 emails are all set from the admin site, not in the code.
 

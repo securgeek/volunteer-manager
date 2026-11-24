@@ -1,4 +1,4 @@
-# BSides Charm Volunteer Export API
+# Volunteer Manager Export API
 
 A read-only HTTPS API for other servers. It returns the volunteer schedule and the volunteer
 list with each person's shifts. Every endpoint is `GET`, and none of them can change anything.
@@ -109,13 +109,13 @@ on each volunteer, and one with `checkin:codes` gets `checkin_code` on each shif
 **curl**
 
 ```bash
-export BSIDES_API_KEY='bsc_…'
+export VOLUNTEER_API_KEY='bsc_…'
 BASE=https://<admin hostname>
 
-curl -sf -H "Authorization: Bearer $BSIDES_API_KEY" \
+curl -sf -H "Authorization: Bearer $VOLUNTEER_API_KEY" \
   "$BASE/api/export/schedule?assigned=1" | jq '.slots[] | {start, position, name}'
 
-curl -sf -H "Authorization: Bearer $BSIDES_API_KEY" \
+curl -sf -H "Authorization: Bearer $VOLUNTEER_API_KEY" \
   "$BASE/api/export/volunteers?assigned=1" | jq '.volunteers[] | {name, shifts: (.shifts | length)}'
 ```
 
@@ -130,7 +130,7 @@ def export(path, **params):
     query = "&".join(f"{k}={v}" for k, v in params.items())
     req = urllib.request.Request(
         f"{BASE}{path}?{query}",
-        headers={"Authorization": f"Bearer {os.environ['BSIDES_API_KEY']}"},
+        headers={"Authorization": f"Bearer {os.environ['VOLUNTEER_API_KEY']}"},
     )
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.load(r)

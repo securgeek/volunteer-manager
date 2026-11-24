@@ -1,6 +1,7 @@
-# BSides Charm Volunteer Scheduler
+# Volunteer Manager
 
-The volunteer scheduler for BSides Charm. Volunteers sign up on the public portal.
+A volunteer manager for conferences, first built for BSidesCharm. Volunteers sign up on the
+public portal.
 Organizers approve them, build the schedule, send each volunteer their shifts, and check
 them in at the event.
 
