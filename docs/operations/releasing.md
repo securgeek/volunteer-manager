@@ -57,11 +57,17 @@ installed*.
     ./run_lint.sh             # pylint, bandit, and the strict docs build
     ```
 
-2. **Close the release's schema changes,** if it has any: set its `SCHEMA_RELEASES` entries to
+2. **Finish the changelog.** In `CHANGELOG.md` at the repo root, rename **Unreleased** to the
+   version and date (`## [1.1.0] — 2026-12-05`), start a new empty **Unreleased** above it,
+   and update the compare links at the bottom. If upgrading needs anything beyond the usual
+   deploy (a setting, a manual step, a rebuild of something unusual), the section starts with
+   **Upgrade notes**. The GitHub release notes can be that section.
+
+3. **Close the release's schema changes,** if it has any: set its `SCHEMA_RELEASES` entries to
    `False` (see [Schema changes](#schema-changes)), and check production matches with
    `tools/schema_check.sh`.
 
-3. **Make the SBOM for this release.** The Security pages show it, and the published version
+4. **Make the SBOM for this release.** The Security pages show it, and the published version
    keeps it.
 
     ```bash
@@ -70,14 +76,14 @@ installed*.
     git add docs/security/sbom/ && git commit -m "SBOM for 1.0.0"
     ```
 
-4. **Tag it and push.**
+5. **Tag it and push.**
 
     ```bash
     git tag -a v1.0.0 -m "1.0.0"
     git push origin master v1.0.0    # or main, whichever your default branch is
     ```
 
-5. **Publish the docs from the tag.** Build from the tag itself, so the commit shown on the
+6. **Publish the docs from the tag.** Build from the tag itself, so the commit shown on the
    Bandit page is the release's:
 
     ```bash
@@ -89,11 +95,11 @@ installed*.
     `mike deploy` builds the site, commits it to the `gh-pages` branch under `1.0/`, points
     `latest` at it, and pushes that branch. Your working branch isn't touched.
 
-6. **Deploy the server** as usual: [Deployment → Shipping a change](deployment.md#shipping-a-change).
+7. **Deploy the server** as usual: [Deployment → Shipping a change](deployment.md#shipping-a-change).
 
 ### The first release only
 
-After step 5, make `latest` the site's front door, and turn Pages on:
+After step 6, make `latest` the site's front door, and turn Pages on:
 
 ```bash
 mike set-default --push latest
