@@ -287,6 +287,10 @@ built. Each of these points is documented in the CLAUDE.md beside the code it de
 - **Request signals** (`security_signals.py`, the same file in both apps) watch for attack
   patterns, scanners, probing, malformed input, cross-site writes and forged session
   cookies. They only watch: the one request refused is one carrying a NUL.
+- **Strict portal input** (`portal/validation.py`): the volunteer pages check every field by
+  the portal's own rules before sending, from one shared list of cases both test suites run,
+  so input that breaks them is an anomaly: recorded and alerted on, and refused once
+  `PORTAL_STRICT=enforce`.
 - **Alerts** (`backend/alerts.py`) turn those, and account and key changes, into email to
   the organizers with audit-log access, at most once an hour per cause. The portal sends
   them through a fixed template with every detail defanged.

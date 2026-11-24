@@ -30,6 +30,7 @@ src/
 ├── lib/colors.js        ← Category chip colors: norm_color / text_on / CAT_FALLBACK
 ├── lib/passkey.js       ← Organizer passkeys: passkey_sign_in / passkey_register (lazy WebAuthn lib)
 ├── lib/checkin_timing.js← Words for a check-in's early/late result, shared by both check-in UIs
+├── lib/portal_rules.js  ← The portal's input rules, checked before sending (portal/validation.py's twin)
 └── components/
     ├── ScheduleView.vue     ← Day tabs (horizontal) + time sidebar (vertical) + Timeslot grid
     ├── Timeslot.vue         ← Single position chip; category color in, glows green (checked-in) / pulses red (past+empty)
@@ -346,6 +347,28 @@ which callers swallow rather than show. The passkey list shows each one's passke
 (from its AAGUID, when known) and algorithm, with ML-DSA tagged post-quantum — the only way to
 tell what a given authenticator actually made. The name field is optional and starts empty:
 the server names a blank one after the passkey manager. Rename is inline, one row at a time.
+
+## Input rules (`lib/portal_rules.js`)
+
+The volunteer pages check names, handles, emails, free-text answers and link tokens by the
+**portal's own rules** before sending anything (`portal/CLAUDE.md` → Strict input
+validation): `problem(kind, value, {label, max})` gives the words to show, or `''`. Anything
+that reaches the portal breaking a rule is recorded as an anomaly and alerted on, so a page
+that sends something the rules refuse would page the organizers.
+
+- **Fields show their problem** after the first blur or a Next/Submit, and Next/Continue stay
+  disabled while there is one (`ApplySignup` step 1 and email step, `ApplyLogin`).
+- **Payloads list their keys.** `ApplySignup` builds `signup` from `names_payload()` and
+  `signup_answers(fields, draft.answers)`, never `{...draft}`: the draft comes back from
+  localStorage and can carry keys an older page saved, answers to removed questions, or a
+  choice no longer offered.
+- **A malformed link is caught here**: `ApplyVerify` says "this link looks damaged" instead
+  of posting a token that fails `TOKEN`; `ApplySignup` treats such an `?invite=` as unknown
+  and never sends it.
+- `portal/test_data/validation_cases.json` is the shared list; `node --test
+  src/lib/portal_rules.test.js` (from `frontend/`, no packages) runs it, and so does
+  `run_lint.sh`. Lengths count code points, like Python. Write invisible characters with
+  `String.fromCodePoint`, never as literals.
 
 ## Signup (`views/apply/ApplySignup.vue`)
 

@@ -36,20 +36,22 @@ import db
 import ratelimit
 import security
 import signup_fields
+import validation
 from config import settings
 from mailer import Mailer
 from routers.auth import (EDITABLE_STATUSES, is_live, _app_title, _client_ip, _floor, _issue_token, _ua,
                           get_session, me_payload, require_volunteer)
 
-router = APIRouter()
+# Every route here is held to validation.py's strict rules (unknown fields, wrong types,
+# characters and lengths the pages can't send).
+router = APIRouter(dependencies=[Depends(validation.strict_request)])
 
-NAME_MAX = 60
-HANDLE_MAX = 40
-EXTRAS_MAX = 20
-# The domain is dot-separated labels, each without a dot, so the match can't backtrack (a
-# domain part of [^@\s]+\.[^@\s]+ could, quadratically: CodeQL #3, #4, #6). It also refuses an
-# empty label, as in a@.b or a@b..c, which were never deliverable anyway.
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
+NAME_MAX = validation.NAME_MAX
+HANDLE_MAX = validation.HANDLE_MAX
+EXTRAS_MAX = validation.EXTRAS_MAX
+SIGNUP_KEYS = frozenset({"first_name", "last_name", "handle", "answers", "prefs", "extras",
+                         "add_any"})
+UPDATE_KEYS = frozenset({"prefs", "extras", "add_any", "answers"})
 
 
 # ── state ─────────────────────────────────────────────────────────────────────
@@ -185,6 +187,8 @@ def invite_status(t: str = "", conn: sqlite3.Connection = Depends(db.get_db)):
         t: The token from the early-access link.
         conn: The database connection.
     """
+    if t and not validation.TOKEN.match(t):
+        validation.anomaly("token", "t")
     return {"status": _invite_status(_invite_by_token(conn, t))}
 
 
@@ -213,17 +217,10 @@ def _require_signup_session(session: Optional[sqlite3.Row]) -> sqlite3.Row:
 
 # ── names ─────────────────────────────────────────────────────────────────────
 
-def _clean_name(raw, limit: int, label: str, required: bool = True) -> str:
-    if raw is None:
-        raw = ""
-    if not isinstance(raw, str):
-        raise HTTPException(status_code=400, detail=f"{label} must be text")
-    clean = " ".join("".join(ch for ch in raw if ch >= " ").split())
-    if required and not clean:
-        raise HTTPException(status_code=400, detail=f"{label} is required")
-    if len(clean) > limit:
-        raise HTTPException(status_code=400, detail=f"{label}: at most {limit} characters")
-    return clean
+def _clean_name(raw, kind: str, where: str, label: str, required: bool = True) -> str:
+    """A first or last name (`kind` "name") or a handle ("handle"), by validation.py's rules."""
+    return validation.field(kind, "" if raw is None else raw, where, required=required,
+                            label=label)
 
 
 def display_name(first: str, last: str, handle: str) -> str:
@@ -286,13 +283,25 @@ def possible_duplicates(conn: sqlite3.Connection, first: str, last: str, handle:
 # ── picks ─────────────────────────────────────────────────────────────────────
 
 def _parse_picks(data: dict) -> tuple:
-    """(prefs, extras, add_any) from a signup or update body, shape-checked only."""
-    prefs, extras = data.get("prefs"), data.get("extras") or []
-    if (not isinstance(prefs, list) or len(prefs) != 2 or len(set(prefs)) != 2
+    """(prefs, extras, add_any) from a signup or update body, shape-checked only.
+
+    The pages only send exactly two different well-formed keys, at most EXTRAS_MAX extras and
+    a real boolean, so anything else is also an anomaly (validation.py).
+    """
+    prefs = validation.typed(data.get("prefs"), list, "prefs")
+    extras = validation.typed(data.get("extras"), list, "extras", default=[])
+    validation.typed(data.get("add_any"), bool, "add_any")
+    for key in (prefs or []) + (extras or []):
+        if not isinstance(key, str) or not validation.PICK_KEY.match(key):
+            validation.anomaly("pick_key", "prefs")
+            break
+    if (not isinstance(prefs, list) or len(prefs) != 2 or len(set(map(str, prefs))) != 2
             or not all(isinstance(p, str) for p in prefs)):
+        validation.anomaly("pick_count", "prefs")
         raise HTTPException(status_code=400, detail="Pick exactly two different shifts.")
     if (not isinstance(extras, list) or len(extras) > EXTRAS_MAX
             or not all(isinstance(e, str) for e in extras)):
+        validation.anomaly("pick_count", "extras")
         raise HTTPException(status_code=400, detail="Malformed extra availability")
     extras = [e for e in dict.fromkeys(extras) if e not in prefs]
     return prefs, extras, 1 if data.get("add_any") is True else 0
@@ -387,9 +396,13 @@ async def check_email(request: Request, email: str = Form(...), invite: str = Fo
     """
     started = time.monotonic()
     ip, ua = _client_ip(request), _ua(request)
-    email = email.strip()
-    if len(email) > 254 or not _EMAIL.match(email):
+    email, problem = validation.check("email", email, required=True)
+    if invite and not validation.TOKEN.match(invite):
+        validation.anomaly("token", "invite")
+    if problem:
         await _floor(started)
+        if problem[0] == "anomaly":
+            validation.anomaly(problem[1], "email")
         raise HTTPException(status_code=400, detail="That doesn't look like an email address.")
     addr_hash = security.email_hmac(settings.email_hmac_key, email)
 
@@ -469,9 +482,9 @@ async def check_name(request: Request,
                            settings.rate_per_min, settings.rate_per_hour):
         await _floor(started)
         raise HTTPException(status_code=429, detail="Too many attempts. Try again shortly.")
-    first = _clean_name(first_name, NAME_MAX, "First name")
-    last = _clean_name(last_name, NAME_MAX, "Last name")
-    handle = _clean_name(handle, HANDLE_MAX, "Handle", required=False)
+    first = _clean_name(first_name, "name", "first_name", "First name")
+    last = _clean_name(last_name, "name", "last_name", "Last name")
+    handle = _clean_name(handle, "handle", "handle", "Handle", required=False)
     match = bool(possible_duplicates(conn, first, last, handle))
     await _floor(started)
     return {"possible_match": match}
@@ -499,18 +512,16 @@ def submit(request: Request, signup: str = Form(...),
             — then the detail is {message, full: [keys]}.
     """
     session = _require_signup_session(session)
-    try:
-        data = json.loads(signup)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Malformed signup") from None
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="Malformed signup")
+    data = validation.json_object(signup, "signup", SIGNUP_KEYS)
 
-    first = _clean_name(data.get("first_name"), NAME_MAX, "First name")
-    last = _clean_name(data.get("last_name"), NAME_MAX, "Last name")
-    handle = _clean_name(data.get("handle"), HANDLE_MAX, "Handle", required=False)
+    first = _clean_name(data.get("first_name"), "name", "signup.first_name", "First name")
+    last = _clean_name(data.get("last_name"), "name", "signup.last_name", "Last name")
+    handle = _clean_name(data.get("handle"), "handle", "signup.handle", "Handle",
+                         required=False)
     try:
-        answers = signup_fields.validate(data.get("answers"), signup_fields.current(conn))
+        answers = signup_fields.validate(
+            validation.typed(data.get("answers"), dict, "signup.answers"),
+            signup_fields.current(conn))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -571,16 +582,6 @@ def submit(request: Request, signup: str = Form(...),
     return {"ok": True, "vol_id": vol_id, "status": "pending"}
 
 
-def _json_field(raw: str, what: str) -> dict:
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Malformed {what}") from None
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail=f"Malformed {what}")
-    return data
-
-
 def _save_picks(conn: sqlite3.Connection, vol_id: str, vol: sqlite3.Row, data: dict,
                 held: set, rejoin: bool = False) -> None:
     """Write a volunteer's picks and editable answers, inside the caller's transaction.
@@ -592,7 +593,8 @@ def _save_picks(conn: sqlite3.Connection, vol_id: str, vol: sqlite3.Row, data: d
     prefs, extras, add_any = _parse_picks(data)
     try:
         answers = signup_fields.validate_edit(
-            data.get("answers") or {}, json.loads(vol["answers"]) if vol["answers"] else {},
+            validation.typed(data.get("answers"), dict, "update.answers", default={}),
+            json.loads(vol["answers"]) if vol["answers"] else {},
             signup_fields.current(conn))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -656,7 +658,7 @@ def update_me(update: str = Form(...),
         HTTPException 409: A new pick filled up or isn't offered: detail {message, full}.
     """
     vol_id = session["vol_id"]
-    data = _json_field(update, "update")
+    data = validation.json_object(update, "update", UPDATE_KEYS)
     conn.execute("BEGIN IMMEDIATE")
     try:
         vol = conn.execute("SELECT status, cancelled_at, inactive_at, answers FROM volunteers "
@@ -737,7 +739,7 @@ def rejoin_me(update: str = Form(...),
             {message, full}.
     """
     vol_id = session["vol_id"]
-    data = _json_field(update, "update")
+    data = validation.json_object(update, "update", UPDATE_KEYS)
     conn.execute("BEGIN IMMEDIATE")
     try:
         vol = conn.execute("SELECT status, cancelled_at, inactive_at, answers FROM volunteers "

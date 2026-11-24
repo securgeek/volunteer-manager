@@ -20,8 +20,11 @@ def test_a_hostile_request_is_stored_for_the_scheduler(app_env, client):
     r = client.post("/api/portal/request_link", data={"email": "x' union select 1--"},
                     headers={"X-Forwarded-For": "203.0.113.9", "User-Agent": "sqlmap/1.8"})
     assert r.status_code != 500
-    (row,) = _rows(app_env)
-    assert row["event"] == "security.attack_signature" and row["severity"] == "high"
+    rows = _rows(app_env)
+    # The address is malformed too, which validation.py records as an anomaly of its own.
+    assert sorted(r["event"] for r in rows) == ["portal.anomaly", "security.attack_signature"]
+    (row,) = [r for r in rows if r["event"] == "security.attack_signature"]
+    assert row["severity"] == "high"
     assert row["ip"] == "203.0.113.9" and row["path"] == "/api/portal/request_link"
     data = json.loads(row["data"])
     assert set(data["rules"]) == {"sql_union", "scanner_agent"}
@@ -52,12 +55,12 @@ def test_ordinary_volunteer_traffic_leaves_no_row(app_env, client):
 def test_the_heartbeat_reports_the_newest_and_the_pull_pages(app_env, client):
     assert _signed(client, "GET", "/api/sync/heartbeat").json()["security_events_rev"] == 0
     for i in range(3):
-        client.get("/api/portal/branding", params={"q": "{{7*7}}"},
-                   headers={"X-Forwarded-For": f"198.51.100.{i}"})
+        client.get("/api/portal/branding",
+                   headers={"X-Forwarded-For": f"198.51.100.{i}", "User-Agent": "nuclei"})
     assert _signed(client, "GET", "/api/sync/heartbeat").json()["security_events_rev"] == 3
     page = _signed(client, "GET", "/api/sync/security_events?since=0&limit=2").json()
     assert [e["id"] for e in page["events"]] == [1, 2] and page["next"] == 2
-    assert page["events"][0]["data"]["rules"] == ["template"]
+    assert page["events"][0]["data"]["rules"] == ["scanner_agent"]
     rest = _signed(client, "GET", "/api/sync/security_events?since=2&limit=500").json()
     assert [e["id"] for e in rest["events"]] == [3] and rest["next"] == 3
     empty = _signed(client, "GET", "/api/sync/security_events?since=3").json()

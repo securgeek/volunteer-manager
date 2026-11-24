@@ -201,6 +201,10 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
 - `security_signals.py` (the **same file** in `backend/` and `portal/`; a test compares them)
   watches every request for attack patterns, probing and malformed input, and refuses only a
   NUL. Portal findings reach the backend's audit log over the sync API.
+- The volunteer pages check input by the portal's own rules before sending
+  (`frontend/src/lib/portal_rules.js` ↔ `portal/validation.py`, one shared case list in
+  `portal/test_data/validation_cases.json`). Input breaking them is a `portal.anomaly`:
+  alerted on, and refused when `PORTAL_STRICT=enforce`.
 
 ### Roles
 | Role | Can do |

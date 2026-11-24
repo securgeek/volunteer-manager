@@ -136,6 +136,42 @@ A compromised scheduler could therefore send its own site's invite, reset or sig
 links to addresses it chose, or an alert of short, single-line, defanged text pointing at
 its own `/admin/audit`, but nothing else. `test_admin_mail.py` pins each of these.
 
+### Strict input validation (`validation.py`)
+
+The volunteer pages check every field before sending (`frontend/src/lib/portal_rules.js`), by
+the **same rules**: `test_data/validation_cases.json` lists accepted and refused inputs, and
+both `test_validation.py` and `node --test frontend/src/lib/portal_rules.test.js` (also in
+`run_lint.sh`) run every case. **Change a rule in both files and add the case.** So input
+breaking a rule here didn't come through the pages: it's an **anomaly**.
+
+- `validation.check(kind, value)` → `(clean, problem)`, kinds `name` (letters, marks, space,
+  `' ’ - .`, ≤ 60), `handle` (printable but `< > { } \``, ≤ 40), `email`, `text` (newlines
+  allowed, ≤ the question's max), `pick_key`, `token`. Every kind refuses control, format
+  (bidi, zero-width; the emoji joiner is allowed), private-use and separator characters.
+  NFC, trimming and space-collapsing are never problems: both sides normalize the same way.
+  Lengths count code points.
+- `problem` is `("error", …)` for an **ordinary mistake** (required and empty), which keeps its
+  helpful message, or `("anomaly", rule)`. `field()` acts on it; `anomaly(rule, where)`
+  records a `portal.anomaly` row in `portal_security_events` (pulled and alerted on like the
+  request signals) and, with `PORTAL_STRICT=enforce`, raises `Anomaly`: a bare
+  `400 Malformed request`. In `report` (the default) the request goes on with the old
+  forgiving behaviour. At most one row a minute per client, rule and path; the next carries
+  `held_back`.
+- `strict_request` is a router dependency on `auth`, `signup` and `branding` (not `sync`):
+  it remembers the request for `anomaly()` (a context variable; it's async so the value
+  reaches sync endpoints' threadpool), and flags a query parameter or form field the route
+  doesn't declare (read from the route's dependant) and a POST body that isn't a form.
+- `json_object` parses the `signup`/`update` JSON fields: no duplicate keys, NaN or Infinity,
+  ≤ 4 deep, ≤ 32 000 characters, only the listed keys. `typed` checks a value's type (a bool
+  is not an int). `_parse_picks` flags malformed keys and wrong counts.
+- **Not anomalies, on purpose:** an unknown *answer* key (dropped, as always) and a choice no
+  longer offered (the old 400). An organizer editing the questionnaire mid-signup produces
+  both from a real volunteer's draft. The pages filter them out too (`signup_answers`).
+- nginx caps `/api/portal/` bodies at 64 KB (`frontend/default.conf`).
+- `validation` reads `config.settings` when it needs it (`_settings()`), because
+  `signup_fields` imports it and some tests import that before the environment is set. Test
+  helpers re-import it per test (`_PORTAL_MODULES` in `test_portal_local.py`).
+
 ### Request signals
 
 `security_signals.py` is **the backend's file, copied unchanged** (`backend/test_security_signals.py`

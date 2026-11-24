@@ -142,6 +142,7 @@ EVENTS: dict[str, Event] = {
     "security.attack_signature": Event("high", "Attack patterns in a request"),
     "security.suspicious_client": Event("high", "Unusual run of refused or malformed requests"),
     "security.sync_auth_fail": Event("critical", "Bad signature on the portal's sync API"),
+    "portal.anomaly": Event("medium", "Input the volunteer pages can't produce"),
     # Alerts (alerts.py). Their own events are never fed back into the rules.
     "alert.fired": Event("medium", "A security alert rule fired"),
     "alert.mailed": Event("info", "A security alert was emailed"),

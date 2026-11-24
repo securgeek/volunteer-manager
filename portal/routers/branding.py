@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, Request, Response
 
 import content
 import db
+import validation
 
-router = APIRouter()
+# Held to validation.py's strict rules: these routes take no parameters at all.
+router = APIRouter(dependencies=[Depends(validation.strict_request)])
 
 
 @router.get("/api/portal/branding")

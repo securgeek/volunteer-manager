@@ -110,10 +110,15 @@ directly or add the observer themselves). `RULES` is the whole list:
 | `api_key.create` / `api_key.refused` / `api_key.new_network` | a key made; 5 refusals from one address in 10 min; a key used from a new network | medium / medium / low |
 | `volunteer.bulk_purge` | 5 purges by one organizer in 10 min | medium |
 | `checkin.key_rotate` | the check-in key rotated | low |
+| `security.attack` / `security.suspicious` / `security.sync_auth` | request signals (below), by address | high / high / critical |
+| `portal.anomaly` | input the volunteer pages can't send (`portal/validation.py`), by address | medium |
 | `severity.high` | any high/critical event no rule above watches (future-proofing) | high |
 
 - **Cooldown**: a rule and key fire at most once per `COOLDOWN_SEC` (1 h); matching events in
-  between are counted, and the next alert carries `held_back`. Plus `MAX_MAILED_PER_HOUR`
+  between are counted, and the next alert carries `held_back`. If no next alert comes,
+  `flush_held_back` (every `FLUSH_EVERY_SEC`, 10 min) sends the count as a "(continued)"
+  follow-up once the cooldown ends, and starts another, so no count is lost and a flood
+  that keeps going is one summary an hour. Plus `MAX_MAILED_PER_HOUR`
   (15) mailed alerts in all; over it they're recorded with `mailed: false`.
 - **A fired alert** is an `alert.fired` audit event at the alert's severity (`audit(...,
   severity=…)`, request `None`), then queued. The worker (`deliver`) mails each recipient

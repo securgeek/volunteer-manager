@@ -12,8 +12,10 @@ A fired alert:
   address in `users.email`), through the portal's `send_admin_mail` (kind `alert`), sent by a
   background task so no request waits on mail;
 * starts a **cooldown** for that rule and key (`COOLDOWN_SEC`). Matching events during it are
-  only counted, and the next alert for the same rule and key says how many there were. So a
-  flood of failed sign-ins is one email an hour, not one per attempt.
+  only counted. When it ends, the count goes out: with the next alert for the same rule and
+  key, or, if none comes, as a follow-up of its own (`flush_held_back`, every
+  FLUSH_EVERY_SEC). So a flood is one email straight away and then at most one an hour, and
+  no count is ever lost because the activity stopped.
 
 At most `MAX_MAILED_PER_HOUR` alerts are emailed an hour in all; past that they are still
 recorded in the audit log, with `mailed: false`.
@@ -47,6 +49,7 @@ log = logging.getLogger("alerts")
 _monotonic = time.monotonic
 
 COOLDOWN_SEC = 3600
+FLUSH_EVERY_SEC = 600         # how often held-back counts are checked for a follow-up
 MAX_MAILED_PER_HOUR = 15
 LOOKBACK_DAYS = 30            # for the "new network" rules (fixed in their SQL below)
 MAIL_RETRY_SEC = 60
@@ -213,7 +216,10 @@ RULES: tuple[Rule, ...] = (
          frozenset({"security.suspicious_client"}), _ip_key),
     Rule("security.sync_auth", "Bad signature on the portal's internal sync API", "critical",
          frozenset({"security.sync_auth_fail"}), _ip_key),
+    Rule("portal.anomaly", "Volunteer-page input the pages themselves can't send", "medium",
+         frozenset({"portal.anomaly"}), _ip_key),
 )
+_BY_ID = {r.rule_id: r for r in RULES}
 _WATCHED = frozenset().union(*(r.events for r in RULES))
 # Any high or critical event that no rule above watches still alerts, under this rule, so a
 # new high-severity event code is covered from the day it's added to audit.EVENTS.
@@ -240,6 +246,7 @@ class _AlertState:
     loop: asyncio.AbstractEventLoop | None = None
     queue: asyncio.Queue | None = None
     worker: asyncio.Task | None = None
+    flusher: asyncio.Task | None = None
     # Alerts queued with no running loop (tests, or before start()).
     unsent: list = field(default_factory=list)
 
@@ -358,12 +365,7 @@ def _fire(rule: Rule, key: str, rec: dict, count: int, held_back: int) -> None:
     if not alert.mailed:
         log.warning("alerts: hourly mail cap reached; %s recorded but not mailed", rule.rule_id)
         return
-    loop, queue = _state.loop, _state.queue
-    if loop is not None and queue is not None and loop.is_running():
-        loop.call_soon_threadsafe(queue.put_nowait, alert)
-    else:
-        with _state.lock:
-            _state.unsent.append(alert)
+    _queue(alert)
 
 
 _RECIPIENTS_SQL = (
@@ -439,6 +441,55 @@ async def deliver(alert: Alert) -> int:
     return reached
 
 
+def flush_held_back() -> int:
+    """Send a follow-up for every rule and key whose cooldown has ended with events held
+    back and no new alert to carry them. Each follow-up starts a new cooldown, so a flood
+    that keeps going is a summary an hour.
+
+    Returns:
+        How many follow-ups fired.
+    """
+    now = _monotonic()
+    due = []
+    with _state.lock:
+        for slot, count in list(_state.suppressed.items()):
+            if count and _state.cooldown_until.get(slot, 0) <= now and slot[0] in _BY_ID:
+                due.append((slot, count))
+                del _state.suppressed[slot]
+                _state.cooldown_until[slot] = now + COOLDOWN_SEC
+    for (rule_id, key), count in due:
+        rule = _BY_ID[rule_id]
+        alert = Alert(rule.rule_id, f"{rule.title} (continued)", rule.severity,
+                      [("Rule", rule.rule_id), ("For", str(key)[:FACT_MAX]),
+                       ("Held back", f"{count} more in the last hour")], count)
+        alert.mailed = _state.mailed.allow("all")
+        audit("alert.fired", None, None, alert.title, severity=rule.severity, rule=rule_id,
+              key=key, follow_up=True, held_back=count, mailed=alert.mailed)
+        if alert.mailed:
+            _queue(alert)
+    return len(due)
+
+
+def _queue(alert: Alert) -> None:
+    loop, queue = _state.loop, _state.queue
+    if loop is not None and queue is not None and loop.is_running():
+        loop.call_soon_threadsafe(queue.put_nowait, alert)
+    else:
+        with _state.lock:
+            _state.unsent.append(alert)
+
+
+async def _flusher() -> None:
+    """Run flush_held_back every FLUSH_EVERY_SEC, for as long as the app runs."""
+    while True:
+        await asyncio.sleep(FLUSH_EVERY_SEC)
+        try:
+            flush_held_back()
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Deliberately broad: the loop must outlive one bad pass.
+            log.error("alerts: flushing held-back counts failed: %s", exc)
+
+
 async def _worker() -> None:
     """Mail queued alerts one at a time, for as long as the app runs."""
     while True:
@@ -459,6 +510,7 @@ def start(loop: asyncio.AbstractEventLoop) -> None:
     _state.loop = loop
     _state.queue = asyncio.Queue()
     _state.worker = loop.create_task(_worker())
+    _state.flusher = loop.create_task(_flusher())
     add_observer(observe)
     with _state.lock:
         pending, _state.unsent = _state.unsent, []
@@ -469,6 +521,7 @@ def start(loop: asyncio.AbstractEventLoop) -> None:
 def stop() -> None:
     """Stop watching and cancel the mail worker (shutdown, tests)."""
     remove_observer(observe)
-    if _state.worker is not None:
-        _state.worker.cancel()
-    _state.loop = _state.queue = _state.worker = None
+    for task in (_state.worker, _state.flusher):
+        if task is not None:
+            task.cancel()
+    _state.loop = _state.queue = _state.worker = _state.flusher = None

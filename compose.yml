@@ -102,6 +102,9 @@ services:
       SYNC_KEY_ID:      "${SYNC_KEY_ID:?set SYNC_KEY_ID}"
       SYNC_SECRET:      "${SYNC_SECRET:?set SYNC_SECRET}"
       SYNC_SECRET_PREV: ${SYNC_SECRET_PREV:-}
+      # Strict input validation (portal/validation.py): "report" records input the volunteer
+      # pages can't send and lets it through; "enforce" also refuses it.
+      PORTAL_STRICT:    ${PORTAL_STRICT:-report}
     # No host publish: the backend syncs over the compose network and browsers come through
     # nginx's /api/portal/. default for both of those; mail_internal is how it reaches
     # mailrelay.

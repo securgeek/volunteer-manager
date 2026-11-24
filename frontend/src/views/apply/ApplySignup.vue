@@ -11,6 +11,7 @@ import Tag         from 'primevue/tag'
 import Message     from 'primevue/message'
 import ShiftPicker from '../../components/ShiftPicker.vue'
 import { portal_get, portal_post, APPLY_EMAIL_KEY, usePortalBranding } from '../../composables/usePortal.js'
+import { check, problem as rule_problem, signup_answers, TOKEN, NAME_MAX, HANDLE_MAX } from '../../lib/portal_rules.js'
 
 // Volunteer signup, email first (vol_signup.md §7-§8; portal/routers/signup.py).
 //
@@ -95,10 +96,14 @@ async function start() {
   } else {
     try { invite.value = sessionStorage.getItem(INVITE_KEY) || '' } catch { /* private mode */ }
   }
+  // A link mangled on the way (wrapped by a mail app, half copied) can't be an invite. It's
+  // treated as unknown here rather than sent: the portal records anything else as an anomaly.
+  const invite_shape_ok = !invite.value || TOKEN.test(invite.value)
   const [st, sess, inv] = await Promise.all([
     portal_get('signup/status'), portal_get('signup/session'),
-    invite.value ? portal_get(`signup/invite?t=${encodeURIComponent(invite.value)}`)
-                 : Promise.resolve(null)])
+    invite.value && invite_shape_ok
+      ? portal_get(`signup/invite?t=${encodeURIComponent(invite.value)}`)
+      : Promise.resolve(invite.value ? { ok: true, body: { status: 'unknown' } } : null)])
   if (sess.ok && sess.body.volunteer)      { router.replace('/apply/me'); return }
   if (sess.ok && sess.body.signup_session) { await open_form(); return }
   const state = st.ok ? st.body.state : 'closed'
@@ -131,11 +136,19 @@ onMounted(start)
 onUnmounted(() => { clearInterval(poll_timer); clearInterval(tick_timer) })
 
 // ── email ─────────────────────────────────────────────────────────────────────
+// The address, by the portal's rules (lib/portal_rules.js); '' when it's fine.
+const email_problem = computed(() => rule_problem('email', email.value))
+const email_touched = ref(false)
+// Only a well-formed invite token is ever sent along.
+const invite_to_send = computed(() => TOKEN.test(invite.value) ? invite.value : '')
+
 async function check_email() {
-  if (!email.value.trim()) return
+  email_touched.value = true
+  if (email_problem.value) return
+  email.value = check('email', email.value).clean
   busy.value = true; message.value = ''; registered.value = false
   const { ok, body } = await portal_post('signup/check_email',
-                                         { email: email.value.trim(), invite: invite.value })
+                                         { email: email.value, invite: invite_to_send.value })
   busy.value = false
   if (ok && body.registered) {
     registered.value = true
@@ -163,7 +176,7 @@ function start_cooldown() {
 
 async function resend() {
   const { ok, body } = await portal_post('signup/check_email',
-                                         { email: email.value.trim(), invite: invite.value })
+                                         { email: email.value, invite: invite_to_send.value })
   message.value = body?.detail || ''
   if (ok && body.sent) start_cooldown()
 }
@@ -186,10 +199,17 @@ function field_problem(f) {
   if (f.type === 'choice' || f.type === 'select') {
     if (!v) return f.required ? 'Please choose one.' : ''
     const opt = f.options.find(o => o.value === v)
-    if (opt?.detail && !(ans()[opt.detail.key] || '').trim()) return `${opt.detail.label} is required.`
+    if (opt?.detail) {
+      const text = ans()[opt.detail.key] || ''
+      if (!text.trim()) return `${opt.detail.label} is required.`
+      return rule_problem('text', text, { label: opt.detail.label, max: opt.detail.max })
+    }
     return ''
   }
-  if (f.type === 'text' && f.required && !(v || '').trim()) return 'Required.'
+  if (f.type === 'text') {
+    if (f.required && !(v || '').trim()) return 'Required.'
+    return rule_problem('text', v || '', { label: 'This answer', max: f.max })
+  }
   return ''
 }
 
@@ -198,10 +218,19 @@ const SECTION_FOR_STEP = { [SHIFTS_STEP]: 'shifts', [ADDITIONAL_STEP]: 'addition
 const step_fields = computed(() =>
   fields.value.filter(f => f.section === SECTION_FOR_STEP[step.value]))
 
+// The names, by the portal's rules (lib/portal_rules.js): '' when fine.
+const name_problems = computed(() => ({
+  first:  rule_problem('name', draft.first_name, { label: 'First name' }),
+  last:   rule_problem('name', draft.last_name, { label: 'Last name' }),
+  handle: rule_problem('handle', draft.handle, { label: 'Handle' }),
+}))
+const touched = reactive({ first: false, last: false, handle: false })
+const show_name = (k) => (touched[k] || show_problems.value) && name_problems.value[k]
+
 const step_problem = computed(() => {
   if (step.value === 1) {
-    if (!draft.first_name.trim()) return 'Enter your first name.'
-    if (!draft.last_name.trim())  return 'Enter your last name.'
+    const p = name_problems.value
+    if (p.first || p.last || p.handle) return p.first || p.last || p.handle
   }
   if (step.value === SHIFTS_STEP && draft.prefs.length !== 2) return 'Pick exactly two shifts.'
   for (const f of step_fields.value) {
@@ -219,8 +248,7 @@ async function next() {
   message.value = ''
   if (step.value === 1 && !name_hint_ack.value) {
     busy.value = true
-    const { ok, body } = await portal_post('signup/check_name', {
-      first_name: draft.first_name, last_name: draft.last_name, handle: draft.handle })
+    const { ok, body } = await portal_post('signup/check_name', names_payload())
     busy.value = false
     if (!ok) { message.value = body?.detail || 'Something went wrong. Try again.'; return }
     if (body.possible_match) { name_hint.value = true; return }
@@ -242,9 +270,20 @@ function back() { message.value = ''; show_problems.value = false; step.value-- 
 const slot_label = (key) => slots.value.find(t => t.key === key)?.label || key
 
 // ── submit ────────────────────────────────────────────────────────────────────
+// Exactly the fields the portal takes, cleaned the way it cleans them. The draft comes back
+// from localStorage and can hold anything an older page put there; none of that is sent.
+function names_payload() {
+  return { first_name: check('name', draft.first_name).clean,
+           last_name:  check('name', draft.last_name).clean,
+           handle:     check('handle', draft.handle).clean }
+}
+
+
 async function submit() {
   busy.value = true; message.value = ''
-  const payload = { ...draft, extras: draft.add_any ? [] : draft.extras }
+  const payload = { ...names_payload(), answers: signup_answers(fields.value, draft.answers),
+                    prefs: [...draft.prefs], extras: draft.add_any ? [] : [...draft.extras],
+                    add_any: draft.add_any === true }
   const { ok, status, body } = await portal_post('signup/submit', { signup: JSON.stringify(payload) })
   busy.value = false
   if (ok) {
@@ -313,9 +352,11 @@ const STEPS = ['About you', 'Shifts', 'Additional questions', 'Review']
        in the rest. No password needed.</p>
     <div class="field">
       <label for="signup-email">Email</label>
-      <InputText id="signup-email" v-model="email" type="email" autocomplete="email" autofocus />
+      <InputText id="signup-email" v-model="email" type="email" autocomplete="email" autofocus
+                 :invalid="email_touched && !!email_problem" @blur="email_touched = !!email.trim()" />
+      <small v-if="email_touched && email_problem" class="problem">{{ email_problem }}</small>
     </div>
-    <Button type="submit" label="Continue" :loading="busy" :disabled="!email.trim()" />
+    <Button type="submit" label="Continue" :loading="busy" :disabled="!!email_problem" />
     <p v-if="message" class="apply-msg" :class="{ err: !registered }">
       {{ message }}
       <RouterLink v-if="registered" to="/apply/login">Sign in</RouterLink>
@@ -357,15 +398,21 @@ const STEPS = ['About you', 'Shifts', 'Additional questions', 'Review']
     <template v-if="step === 1">
       <div class="field">
         <label for="su-first">First name</label>
-        <InputText id="su-first" v-model="draft.first_name" autocomplete="given-name" maxlength="60" />
+        <InputText id="su-first" v-model="draft.first_name" autocomplete="given-name"
+                   :maxlength="NAME_MAX" :invalid="!!show_name('first')" @blur="touched.first = true" />
+        <small v-if="show_name('first')" class="problem">{{ name_problems.first }}</small>
       </div>
       <div class="field">
         <label for="su-last">Last name</label>
-        <InputText id="su-last" v-model="draft.last_name" autocomplete="family-name" maxlength="60" />
+        <InputText id="su-last" v-model="draft.last_name" autocomplete="family-name"
+                   :maxlength="NAME_MAX" :invalid="!!show_name('last')" @blur="touched.last = true" />
+        <small v-if="show_name('last')" class="problem">{{ name_problems.last }}</small>
       </div>
       <div class="field">
         <label for="su-handle">Handle <span class="opt">(optional)</span></label>
-        <InputText id="su-handle" v-model="draft.handle" maxlength="40" />
+        <InputText id="su-handle" v-model="draft.handle" :maxlength="HANDLE_MAX"
+                   :invalid="!!show_name('handle')" @blur="touched.handle = true" />
+        <small v-if="show_name('handle')" class="problem">{{ name_problems.handle }}</small>
       </div>
 
       <div v-if="name_hint" class="hint">

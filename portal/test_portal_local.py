@@ -33,7 +33,7 @@ SYNC_SECRET = "s3cret-for-tests"
 # module — and the app would serve a previous test's settings. The package has to go too.
 _PORTAL_MODULES = ("main", "routers.auth", "routers.sync", "routers.branding",
                    "routers.signup", "routers", "config", "db", "clock", "security", "mailer",
-                   "ratelimit", "signup_fields")
+                   "ratelimit", "signup_fields", "validation", "security_signals")
 
 
 def _fresh_portal():
@@ -946,8 +946,9 @@ _ADDRESSES = {
 
 
 def test_the_address_patterns_accept_what_they_should(app_env):  # app_env: the settings routers import
-    from routers import signup, sync
-    for pattern in (signup._EMAIL, sync._ADDR):
+    import validation
+    from routers import sync
+    for pattern in (validation._EMAIL, sync._ADDR):
         for addr, ok in _ADDRESSES.items():
             assert bool(pattern.match(addr)) is ok, (pattern.pattern, addr)
 
@@ -963,12 +964,13 @@ def test_the_branding_link_pattern_accepts_what_it_should(app_env):  # app_env: 
 
 def test_the_patterns_stay_fast_on_their_worst_inputs(app_env):  # app_env: the settings routers import
     import time
-    from routers import signup, sync
+    import validation
+    from routers import sync
     worst = ["a@" + "." * 5000 + "@", "a@" + "a." * 5000 + "!", "a@" + "a" * 10000 + "!"]
     links = ["https://" + "a" * 10000 + " ", "https://" + "a/" * 5000 + " "]
     started = time.perf_counter()
     for text in worst:
-        signup._EMAIL.match(text)
+        validation._EMAIL.match(text)
         sync._ADDR.match(text)
     for text in links:
         sync._PUBLIC_LINK.match(text)

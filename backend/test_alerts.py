@@ -331,3 +331,42 @@ def test_a_failing_rule_never_fails_the_audit_call(monkeypatch, tmp_path, caplog
 ])
 def test_network(ip, net):
     assert alerts.network(ip) == net
+
+
+# ── held-back counts are never lost ───────────────────────────────────────────
+
+def test_a_count_left_when_the_flood_stops_goes_out_as_a_follow_up(fresh, tmp_path):
+    for _ in range(10):
+        _fail(reason="unknown_user")
+    for _ in range(7):
+        _fail(reason="unknown_user")                      # held back; then it stops
+    assert alerts.flush_held_back() == 0                  # still cooling down
+    fresh.now += alerts.COOLDOWN_SEC + 1
+    assert alerts.flush_held_back() == 1
+    follow = alerts._state.unsent[-1]
+    assert follow.title.endswith("(continued)") and follow.held_back == 7
+    assert dict(follow.facts)["Held back"] == "7 more in the last hour"
+    fired = [f for f in _fired(tmp_path) if f["data"].get("follow_up")]
+    assert fired and fired[0]["data"]["rule"] == "login.bruteforce.ip"
+    assert alerts.flush_held_back() == 0                  # nothing left to say
+
+
+def test_a_flood_that_keeps_going_is_a_summary_an_hour(fresh):
+    for _ in range(10):
+        _fail(reason="unknown_user")
+    for _hour in range(3):
+        for _ in range(20):
+            _fail(reason="unknown_user")
+        fresh.now += alerts.COOLDOWN_SEC + 1
+        alerts.flush_held_back()
+    ip_alerts = [a for a in alerts._state.unsent if a.rule_id == "login.bruteforce.ip"]
+    assert [a.held_back for a in ip_alerts] == [0, 20, 20, 20]
+
+
+def test_a_portal_anomaly_alerts_once_per_address_then_counts(fresh):
+    for _ in range(3):
+        alerts.observe(_rec("portal.anomaly", severity="medium", rule="name_chars",
+                            where="signup.first_name", mode="report"))
+    assert _rules() == ["portal.anomaly"]
+    fresh.now += alerts.COOLDOWN_SEC + 1
+    assert alerts.flush_held_back() == 1

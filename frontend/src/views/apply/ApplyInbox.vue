@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import { portal_post, portal_get, APPLY_EMAIL_KEY } from '../../composables/usePortal.js'
+import { check } from '../../lib/portal_rules.js'
 
 const RESEND_COOLDOWN_SEC = 60
 const POLL_MS             = 5000
@@ -25,6 +26,9 @@ function start_cooldown() {
 }
 
 async function resend() {
+  // The address came from the sign-in page, already checked; anything else (an old or
+  // edited sessionStorage) goes back there rather than to the portal.
+  if (check('email', email).problem) { router.push('/apply/login'); return }
   const { body } = await portal_post('request_link', { email })
   message.value = body?.detail || ''
   error.value   = !body?.sent

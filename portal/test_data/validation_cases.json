@@ -1,0 +1,566 @@
+{
+ "_about": "Input rules shared by portal/validation.py and frontend/src/lib/portal_rules.js. Both test suites run every case. expect: ok (accepted; clean is what it becomes), error (an ordinary mistake the UI explains, e.g. required), anomaly (only possible by bypassing the UI; the portal records it). The UI must refuse error and anomaly cases alike.",
+ "cases": [
+  {
+   "kind": "name",
+   "value": "Jim",
+   "expect": "ok",
+   "clean": "Jim"
+  },
+  {
+   "kind": "name",
+   "value": "O'Brien",
+   "expect": "ok",
+   "clean": "O'Brien"
+  },
+  {
+   "kind": "name",
+   "value": "O\u2019Brien",
+   "expect": "ok",
+   "clean": "O\u2019Brien"
+  },
+  {
+   "kind": "name",
+   "value": "Mar\u00eda-Jos\u00e9",
+   "expect": "ok",
+   "clean": "Mar\u00eda-Jos\u00e9"
+  },
+  {
+   "kind": "name",
+   "value": "Nguy\u1ec5n",
+   "expect": "ok",
+   "clean": "Nguy\u1ec5n"
+  },
+  {
+   "kind": "name",
+   "value": "Jr.",
+   "expect": "ok",
+   "clean": "Jr."
+  },
+  {
+   "kind": "name",
+   "value": "  Mary   Ann  ",
+   "expect": "ok",
+   "clean": "Mary Ann"
+  },
+  {
+   "kind": "name",
+   "value": "Zo\u00eb",
+   "expect": "ok",
+   "clean": "Zo\u00eb"
+  },
+  {
+   "kind": "name",
+   "value": "\u674e",
+   "expect": "ok",
+   "clean": "\u674e"
+  },
+  {
+   "kind": "name",
+   "value": "\u00d3lafur",
+   "expect": "ok",
+   "clean": "\u00d3lafur"
+  },
+  {
+   "kind": "name",
+   "value": "e\u0301",
+   "expect": "ok",
+   "clean": "\u00e9"
+  },
+  {
+   "kind": "name",
+   "value": "Mary\u00a0Ann",
+   "expect": "ok",
+   "clean": "Mary Ann"
+  },
+  {
+   "kind": "name",
+   "value": "",
+   "expect": "error"
+  },
+  {
+   "kind": "name",
+   "value": "   ",
+   "expect": "error"
+  },
+  {
+   "kind": "name",
+   "value": "R2D2",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Bob <b>",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Eve;",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "a@b",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Jim\u0000",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Ji\u202em",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Ji\u200bm",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Jim\tBob",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Jim\nBob",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Ji\u2028m",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "\ud83e\udd80",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "Bob_",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "{{ 7*7 }}",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "name",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "ok",
+   "clean": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "kind": "handle",
+   "value": "",
+   "expect": "ok",
+   "clean": ""
+  },
+  {
+   "kind": "handle",
+   "value": "crab\ud83e\udd80",
+   "expect": "ok",
+   "clean": "crab\ud83e\udd80"
+  },
+  {
+   "kind": "handle",
+   "value": "h4x0r",
+   "expect": "ok",
+   "clean": "h4x0r"
+  },
+  {
+   "kind": "handle",
+   "value": "@jim",
+   "expect": "ok",
+   "clean": "@jim"
+  },
+  {
+   "kind": "handle",
+   "value": "the_dude",
+   "expect": "ok",
+   "clean": "the_dude"
+  },
+  {
+   "kind": "handle",
+   "value": "Nguy\u1ec5n #1",
+   "expect": "ok",
+   "clean": "Nguy\u1ec5n #1"
+  },
+  {
+   "kind": "handle",
+   "value": "a & b",
+   "expect": "ok",
+   "clean": "a & b"
+  },
+  {
+   "kind": "handle",
+   "value": "\ud83d\udc68\u200d\ud83d\udcbb",
+   "expect": "ok",
+   "clean": "\ud83d\udc68\u200d\ud83d\udcbb"
+  },
+  {
+   "kind": "handle",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "ok",
+   "clean": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "kind": "handle",
+   "value": "<script>",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "{{7*7}}",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a`b",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a\u202eb",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a\u0000",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a\tb",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a\u200bb",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "handle",
+   "value": "a\ufeff",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@example.com",
+   "expect": "ok",
+   "clean": "jim@example.com"
+  },
+  {
+   "kind": "email",
+   "value": "  a.b+tag@sub.example.org ",
+   "expect": "ok",
+   "clean": "a.b+tag@sub.example.org"
+  },
+  {
+   "kind": "email",
+   "value": "Mar\u00eda@example.es",
+   "expect": "ok",
+   "clean": "Mar\u00eda@example.es"
+  },
+  {
+   "kind": "email",
+   "value": "x@y.co",
+   "expect": "ok",
+   "clean": "x@y.co"
+  },
+  {
+   "kind": "email",
+   "value": "",
+   "expect": "error"
+  },
+  {
+   "kind": "email",
+   "value": "jim",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "@example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@example",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@@example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "a b@example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@example..com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "jim@.example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "a@b.c\r\nBcc: x@y.z",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "a@b.c\u0000",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.co",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "email",
+   "value": "j\u202em@example.com",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "text",
+   "value": "Vegetarian, no nuts",
+   "expect": "ok",
+   "clean": "Vegetarian, no nuts",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "line one\nline two",
+   "expect": "ok",
+   "clean": "line one\nline two",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "  padded  ",
+   "expect": "ok",
+   "clean": "padded",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "<3 volunteering & radios",
+   "expect": "ok",
+   "clean": "<3 volunteering & radios",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "50% off; drop off at 3",
+   "expect": "ok",
+   "clean": "50% off; drop off at 3",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "\ud83e\udd80",
+   "expect": "ok",
+   "clean": "\ud83e\udd80",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "",
+   "expect": "ok",
+   "clean": "",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "tab\there",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "nul\u0000",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "bidi\u202ex",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "zw\u200bsp",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "ls\u2028x",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "cr\rlf",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "anomaly",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "expect": "ok",
+   "clean": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "max": 200
+  },
+  {
+   "kind": "text",
+   "value": "a\r\nb",
+   "expect": "ok",
+   "clean": "a\nb",
+   "max": 200
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat_0800",
+   "expect": "ok",
+   "clean": "sat_0800"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sun_1500-1700",
+   "expect": "ok",
+   "clean": "sun_1500-1700"
+  },
+  {
+   "kind": "pick_key",
+   "value": "day-2_1130",
+   "expect": "ok",
+   "clean": "day-2_1130"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat_",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "_0800",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "Sat_0800",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat_08:00",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat_0800_x",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat 0800",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "pick_key",
+   "value": "sat_0800\u0000",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "expect": "ok",
+   "clean": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+   "kind": "token",
+   "value": "abc-DEF_123abc-DEF_123abc-DEF_123",
+   "expect": "ok",
+   "clean": "abc-DEF_123abc-DEF_123abc-DEF_123"
+  },
+  {
+   "kind": "token",
+   "value": "",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "short",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/",
+   "expect": "anomaly"
+  },
+  {
+   "kind": "token",
+   "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\u0000",
+   "expect": "anomaly"
+  }
+ ]
+}

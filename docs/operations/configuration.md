@@ -92,6 +92,12 @@ Keep both above 1024, since rootless podman can't bind lower ports.
 |---|---|---|
 | `DEPLOY_HOST` | you, for rsync | The server to copy the repo to: `rsync -aF BSides/ "$DEPLOY_HOST:Scheduler/"`. No container reads it. It lives in `.env` so the address isn't in the repo. |
 
+## Portal input validation
+
+| Setting | Read by | Default | What it does |
+|---|---|---|---|
+| `PORTAL_STRICT` | portal | `report` | How strictly the portal treats input the volunteer pages can't send (a name with digits, an unknown field, an invisible character). Either way it's recorded as a `portal.anomaly` event and the organizers with audit-log access are alerted. `report` then lets the request through as before; `enforce` refuses it with a bare 400. Start with `report`, check the audit log for anomalies from real volunteers, then switch to `enforce`. Anything else stops the portal at startup. |
+
 ## Portal tuning
 
 The portal reads these, but compose doesn't pass them, so they keep their defaults unless

@@ -189,14 +189,17 @@ wrong or important, for example:
 - an organizer signing in from a network they haven't used in the last 30 days
 - requests to the organizer site or the volunteer pages that look like an attack (SQL or
   script injection, scanning tools), or one address piling up errors
+- input to the volunteer pages that the pages themselves would never send, such as a name
+  with digits or a field the form doesn't have. Someone is calling the portal directly.
 
 Alerts go to organizers who can read the audit log **and** have an email address in
 **Profile**. At first that's only the first organizer account. If nobody qualifies, alerts
 are still recorded but not sent, so add your address in Profile. Each alert links to the
 audit log.
 
-One kind of alert comes at most once an hour for the same cause. The next one says how many
-more events came in meanwhile, so a sustained attack is a trickle of mail, not a flood.
+One kind of alert comes at most once an hour for the same cause. Anything more in that hour
+is counted and sent as a "(continued)" summary when the hour is up, so a sustained attack is
+a trickle of mail, not a flood, and nothing goes unreported because it stopped.
 
 Treat what's in an alert as untrusted. Details such as a username can be whatever the
 attacker typed, and anything that looked like a link has been broken on purpose. Open the

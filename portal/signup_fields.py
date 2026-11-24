@@ -24,6 +24,7 @@ scheduler and the duplicate-name check need them.
 import json
 from typing import Optional
 
+import validation
 from content import DEFAULT_FIELDS, TSHIRT_SIZES  # noqa: F401  (TSHIRT_SIZES: re-exported)
 
 # The questionnaire is organizer-editable (Volunteer Portal → Questionnaire in the scheduler),
@@ -47,9 +48,14 @@ def current(conn) -> list:
     return json.loads(row["questionnaire"])
 
 
-def _text(raw, limit: int) -> str:
+def _text(raw, limit: int, key: str = "") -> str:
     if raw is None:
         return ""
+    # validation.py's rule for free text; a breach is an anomaly (recorded, and refused in
+    # enforce mode). In report mode the old forgiving behaviour below still applies.
+    _clean, problem = validation.check("text", raw, maximum=limit)
+    if problem is not None:
+        validation.anomaly(problem[1], f"answers.{key}")
     if not isinstance(raw, str):
         raise ValueError("expected text")
     # One line or several is fine; control characters other than newlines are not.
@@ -82,12 +88,12 @@ def _check(f: dict, answers: dict, out: dict) -> None:
             for opt in f["options"]:
                 detail = opt.get("detail")
                 if detail and opt["value"] == raw:
-                    text = _text(answers.get(detail["key"]), detail["max"])
+                    text = _text(answers.get(detail["key"]), detail["max"], detail["key"])
                     if not text:
                         raise ValueError(f"{detail['label']} is required")
                     out[detail["key"]] = text
         elif kind == "text":
-            text = _text(raw, f["max"])
+            text = _text(raw, f["max"], key)
             if f["required"] and not text:
                 raise ValueError("required")
             if text:
