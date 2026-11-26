@@ -1,20 +1,20 @@
 {
-  "generated_at": "2026-11-24T01:20:18Z",
+  "generated_at": "2026-11-25T02:53:43Z",
   "trivy_version": "0.72.0",
-  "vuln_db_updated_at": "2026-11-23T19:02:50.412495Z",
+  "vuln_db_updated_at": "2026-11-25T01:10:40.560736298Z",
   "artifacts": [
     {
       "name": "backend",
       "kind": "image",
       "source": "localhost/bsides_backend:latest",
-      "detail": "49d889eda1f3, built 2026-11-24 01:18:32 UTC",
+      "detail": "6434f2bd7ea4, built 2026-11-25 02:52:15 UTC",
       "file": "backend.cdx.json"
     },
     {
       "name": "portal",
       "kind": "image",
       "source": "localhost/bsides_portal:latest",
-      "detail": "d93202969abc, built 2026-11-24 01:18:43 UTC",
+      "detail": "e847e70214b2, built 2026-11-25 02:52:17 UTC",
       "file": "portal.cdx.json"
     },
     {
@@ -34,8 +34,8 @@
     {
       "name": "postgres",
       "kind": "image",
-      "source": "docker.io/library/postgres:18-alpine",
-      "detail": "4ea77c7055de, built 2026-11-18 21:31:26 UTC",
+      "source": "localhost/bsides_postgres:latest",
+      "detail": "a4b4521f5190, built 2026-11-25 02:51:52 UTC",
       "file": "postgres.cdx.json"
     },
     {

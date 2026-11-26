@@ -23,11 +23,13 @@ tools that read CycloneDX.
 - **Severity** is the rating from the vulnerability's own source (the Alpine, GitHub or
   Python advisory), falling back to the highest rating any source gives.
 
-**The PostgreSQL image is used as published** (`postgres:18-alpine`), so its findings wait on
-the image's maintainers. Most are in `gosu`, a small Go program the image's entrypoint runs
-once at start to drop root before PostgreSQL starts. It's built with an old Go, and none of
-the network-facing Go code it's flagged for runs in this stack. The app images, by contrast,
-are built here with `apk upgrade`, so a rebuild takes every Alpine fix.
+**The PostgreSQL image is built here too**, from `postgres:18-alpine` (`postgres/Dockerfile`).
+Like the app images, it runs `apk upgrade`, so a rebuild takes every Alpine fix. It also
+removes `gosu` and starts as the `postgres` user. `gosu` is a small Go program the official
+entrypoint runs once at startup to drop root. It's built with an old Go, and it carried
+almost every finding in the published image. None of the Go code it was flagged for ran in
+this stack. Started as `postgres`, the entrypoint never calls it. PostgreSQL itself and the
+entrypoint are the official ones, unchanged.
 
 A listed vulnerability isn't necessarily reachable. Many are in code paths this project never
 calls, such as a library feature it doesn't use. Fix what has a fix by rebuilding the images

@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:30eed61d-401b-40d3-93a5-4609974d5022",
+  "serialNumber": "urn:uuid:6bbd5561-522e-4412-824a-a6d9691ae6f3",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-24T01:20:15+00:00",
+    "timestamp": "2026-11-25T02:53:39+00:00",
     "tools": {
       "components": [
         {
@@ -110,7 +110,7 @@
   },
   "components": [
     {
-      "bom-ref": "15344c57-eaf1-4c79-8781-13303c130aba",
+      "bom-ref": "93dfe7c2-d200-4081-b503-2358d9db38c6",
       "type": "operating-system",
       "name": "alpine",
       "version": "3.24.4",
@@ -3543,7 +3543,7 @@
   ],
   "dependencies": [
     {
-      "ref": "15344c57-eaf1-4c79-8781-13303c130aba",
+      "ref": "93dfe7c2-d200-4081-b503-2358d9db38c6",
       "dependsOn": [
         "pkg:apk/alpine/alpine-baselayout@3.7.2-r1?arch=x86_64&distro=3.24.4",
         "pkg:apk/alpine/alpine-release@3.24.4-r0?arch=x86_64&distro=3.24.4",
@@ -4088,7 +4088,7 @@
     {
       "ref": "pkg:oci/bsides_frontend@sha256:e357147acabb7fab85904f7f819c53b95cc3affecddc6a9f0e9c8f49f14aab68?arch=amd64&repository_url=index.docker.io%2Flocalhost%2Fbsides_frontend",
       "dependsOn": [
-        "15344c57-eaf1-4c79-8781-13303c130aba"
+        "93dfe7c2-d200-4081-b503-2358d9db38c6"
       ]
     }
   ],

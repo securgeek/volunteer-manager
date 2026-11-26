@@ -33,6 +33,8 @@ In short:
    file if you like, and set up rotation for the new one (Deployment → Backups).
 6. **A few days later**, if Admin → Audit Log shows no `portal.anomaly` events from real
    volunteers, set `PORTAL_STRICT=enforce` and restart the portal.
+7. **PostgreSQL now starts as uid 70, not root**, so check before the restart that its volume
+   belongs to uid 70 (Deployment → Upgrading PostgreSQL).
 
 If you ran a pre-release 1.1 build: its `users.audit_access` is replaced by
 `users.audit_alerts`, ticked on the earliest organizer only. Re-tick anyone else.
@@ -78,6 +80,9 @@ Developers: `tools/gather-screenshots` now needs Node 22.12 or later.
 - Schema: backend 20 (`audit_events`, `users.audit_alerts`), portal 8
   (`portal_security_events`). Both migrate on start.
 - nginx caps volunteer-portal request bodies at 64 KB.
+- The PostgreSQL image is built here (`postgres/Dockerfile`) from `postgres:18-alpine`: it
+  takes Alpine's current fixes and drops `gosu`, which held almost all of the published
+  image's scanner findings. It starts as the `postgres` user (uid 70) instead of root.
 
 ### Fixed
 

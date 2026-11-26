@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    # postgres:18-alpine with Alpine's fixes and without gosu, running as postgres (uid 70),
+    # so everything in the volume must belong to uid 70 (postgres/Dockerfile).
+    build:
+      context: ./postgres
     environment:
       POSTGRES_DB:       scheduler
       POSTGRES_USER:     scheduler

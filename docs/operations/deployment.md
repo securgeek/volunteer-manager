@@ -109,7 +109,8 @@ each container to podman's 10-second kill.
 1.1 adds the audit log's table, security alerts, request watching and strict input checks on
 the volunteer pages. Ship it the usual way (above): it changes the backend, the portal and
 the frontend's nginx, so rebuild all three, and both databases migrate by themselves on
-start. Before and after:
+start. PostgreSQL is now built here as well (`postgres/Dockerfile`), and the rsync must
+include the new `postgres/` directory. Before and after:
 
 1. **`.env`:** add `PORTAL_STRICT=report` (the default if it's missing) and, if you want a
    retention other than a year, `AUDIT_RETENTION_DAYS` (see [Configuration](configuration.md)).
@@ -123,6 +124,9 @@ start. Before and after:
 5. **A few days later:** if the Audit Log shows no `portal.anomaly` events from real
    volunteers (filter on *Portal anomalies*), set `PORTAL_STRICT=enforce` and restart the
    portal.
+6. **Before the restart, check the database volume's owner.** PostgreSQL now starts as uid 70
+   instead of root. The check under [Upgrading PostgreSQL](#upgrading-postgresql) should list
+   nothing but `18/`.
 
 Rolling back is the 1.0 code on the same databases: neither app refuses a schema newer than
 its own, and 1.1 only adds a table and columns, which 1.0 ignores. Take the usual backup
@@ -134,8 +138,9 @@ The official image keeps its data in a directory named for the major version, an
 to start on an older major's data. The database is small, so a major upgrade is a dump and
 restore into a fresh volume, not `pg_upgrade`. The 16 → 18 upgrade was done on 2026-11-01.
 
-For the next one, add a `pgdata19` volume, point the `postgres` service's image and mount at
-it in `compose.yml`, and on the server:
+For the next one, add a `pgdata19` volume, change the `FROM` line in `postgres/Dockerfile` to
+`postgres:19-alpine`, point the `postgres` service's mount at the new volume in `compose.yml`,
+and on the server:
 
 ```bash
 cd ~/Scheduler
@@ -145,15 +150,28 @@ chmod 600 ~/pg-old.dump                         # outside ~/Scheduler: rsync --d
 COUNTS="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I', table_name), false, true, '')))[1]::text::int from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1"
 podman exec scheduler_postgres_1 psql -U scheduler -d scheduler -Atc "$COUNTS" > ~/pg-old-counts.txt
 podman-compose down
-# rsync the new compose.yml, then:
+# rsync the new compose.yml and postgres/Dockerfile, then:
+podman-compose build postgres
 podman-compose up -d postgres                   # wait for (healthy)
 podman exec -i scheduler_postgres_1 pg_restore -U scheduler -d scheduler --no-owner --exit-on-error < ~/pg-old.dump
 podman exec scheduler_postgres_1 psql -U scheduler -d scheduler -Atc "$COUNTS" | diff ~/pg-old-counts.txt - && echo "row counts match"
 podman-compose up -d
 ```
 
-To roll back, put the old image and mount back in `compose.yml`: the old volume is never
-touched. Once the new version has settled, `podman volume rm` the old volume and
+To roll back, put the old `FROM` line and mount back and rebuild: the old volume is never
+touched.
+
+**Volume ownership.** The image starts as the `postgres` user (uid 70), not as root, so it
+can't fix ownership in the volume itself. A new volume is fine: podman fills it from the
+image's `/var/lib/postgresql`, which uid 70 owns. A volume carried over from elsewhere must
+be owned by uid 70 throughout. This prints anything that isn't:
+
+```bash
+podman unshare find ~/.local/share/containers/storage/volumes/scheduler_pgdata18/_data \! -user 70 -ls
+```
+
+A root-owned `18/` directory, which holds the data directory `18/docker`, is expected and
+harmless. PostgreSQL only needs to own `18/docker` itself. Once the new version has settled, `podman volume rm` the old volume and
 `shred -u` the dump, which holds volunteer names and email ciphertext.
 
 ## Backups

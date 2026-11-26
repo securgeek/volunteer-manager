@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:fa7112a8-99ac-4dc1-aaf2-d9e4f03e797f",
+  "serialNumber": "urn:uuid:e7d19a1c-2d94-446a-870b-e95e286a888e",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-24T01:20:15+00:00",
+    "timestamp": "2026-11-25T02:53:40+00:00",
     "tools": {
       "components": [
         {
@@ -20,7 +20,7 @@
       ]
     },
     "component": {
-      "bom-ref": "017aa40e-3dd3-452d-a9c8-ac88907c17ef",
+      "bom-ref": "633c3dc8-4dba-4896-9d3b-c64926ec1dc7",
       "type": "application",
       "name": "frontend/package-lock.json",
       "properties": [
@@ -33,7 +33,7 @@
   },
   "components": [
     {
-      "bom-ref": "ff78a033-828a-4a3e-9e9a-635fe2f18bc8",
+      "bom-ref": "8740bc9b-44d3-406d-9f08-14316e919214",
       "type": "application",
       "name": "package-lock.json",
       "properties": [
@@ -1060,13 +1060,13 @@
   ],
   "dependencies": [
     {
-      "ref": "017aa40e-3dd3-452d-a9c8-ac88907c17ef",
+      "ref": "633c3dc8-4dba-4896-9d3b-c64926ec1dc7",
       "dependsOn": [
-        "ff78a033-828a-4a3e-9e9a-635fe2f18bc8"
+        "8740bc9b-44d3-406d-9f08-14316e919214"
       ]
     },
     {
-      "ref": "ff78a033-828a-4a3e-9e9a-635fe2f18bc8",
+      "ref": "8740bc9b-44d3-406d-9f08-14316e919214",
       "dependsOn": [
         "pkg:npm/%40fontsource/montserrat@5.3.0",
         "pkg:npm/%40fontsource/source-sans-3@5.3.1",
