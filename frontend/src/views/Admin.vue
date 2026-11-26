@@ -320,7 +320,7 @@ async function logout() {
                     :severity="checkin_open ? undefined : 'secondary'"
                     @click="checkin_open = !checkin_open" />
           </div>
-          <VolunteerCheckin v-if="checkin_open" @close="checkin_open = false" />
+          <VolunteerCheckin v-if="checkin_open" :schedule="schedule" @close="checkin_open = false" />
           <ShiftFlags v-if="is_admin" ref="shift_flags" @open-slot="open_slot" />
           <ScheduleView ref="schedule_view" :schedule="schedule" :role="user_info.role" :app-logo="app_logo"
                         @schedule-updated="on_schedule_updated" />

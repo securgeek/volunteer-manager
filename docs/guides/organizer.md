@@ -165,6 +165,11 @@ from the volunteer's schedule email, or type the code. If the volunteer is more 
 minutes early or 10 minutes late, it asks first: **Check in anyway** records the check-in
 with the timing. A slot's dialog has a **Check In** button too.
 
+No email to hand? Type two or more letters of their name or handle into **Find by name**.
+Each match lists that volunteer's shifts and shows which are already checked in. The shift
+starting nearest the current time, in the event timezone, is marked **Next**. Press
+**Check in** on the right shift. The same early or late question applies.
+
 Checked-in slots glow green. Past slots with nobody checked in pulse red.
 
 **Ratings and notes.** A slot's dialog can rate the volunteer **Good**, **Bad** or

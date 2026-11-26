@@ -29,7 +29,7 @@ src/
 ├── assets/main.css      ← Global styles
 ├── lib/colors.js        ← Category chip colors: norm_color / text_on / CAT_FALLBACK
 ├── lib/passkey.js       ← Organizer passkeys: passkey_sign_in / passkey_register (lazy WebAuthn lib)
-├── lib/checkin_timing.js← Words for a check-in's early/late result, shared by both check-in UIs
+├── lib/checkin_timing.js← Words for a check-in's early/late result, shared by both check-in UIs; shift_start_ms / closest_shift for name check-in
 ├── lib/portal_rules.js  ← The portal's input rules, checked before sending (portal/validation.py's twin)
 └── components/
     ├── ScheduleView.vue     ← Day tabs (horizontal) + time sidebar (vertical) + Timeslot grid
@@ -39,7 +39,7 @@ src/
     ├── EmailKeyManager.vue  ← Upload public key, decrypt email in-browser with private key
     ├── AppSettings.vue      ← App title and logo, plus EventSettings
     ├── EventSettings.vue    ← Event timezone; Rotate key (voids every check-in code)
-    ├── VolunteerCheckin.vue ← Inline (Schedule tab): scan schedule-email codes; early/late confirm
+    ├── VolunteerCheckin.vue ← Inline (Schedule tab): scan schedule-email codes or find by name; early/late confirm
     ├── EmailTemplate.vue    ← Call for Volunteers → Schedule Email: Markdown, images, live preview, package
     ├── ApiTokens.vue        ← Admin → API Keys: create (shown once), list, revoke
     ├── UserManager.vue      ← List/add/role/password/email/delete users, clear passkeys, invites, security alerts (organizer-only)
@@ -325,6 +325,15 @@ More than 45 min early or 10 min late comes back as `needs_confirm`: the panel h
 and shows **Check in anyway** / **Skip**, ignoring further scans until one is pressed so the
 question can't scroll away. `TimeslotDialog`'s **Check In** button gets the same prompt, since
 `checkin_vol` applies the same rule. Wording for both is `lib/checkin_timing.js`.
+
+**Find by name** (same panel) searches name and handle among volunteers with a shift and
+checks in through `POST /api/checkin_vol`, sharing the panel's `pending` / confirm and
+receipt list. Its data is Admin.vue's `schedule`, passed as a prop, not a fetch of its own:
+Admin reloads it on every `checkin` SSE event, so each shift's ✓ stays live across desks.
+The **Next** shift is `closest_shift` (not checked in, start nearest now) over
+`shift_start_ms`, the browser's copy of `checkin_codes.shift_start`, read in `event_tz` from
+`/api/app_config`. It's display only; the server still judges early/late. `node --test
+src/lib/checkin_timing.test.js` covers both helpers.
 
 ## Schedule email
 
