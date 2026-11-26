@@ -18,6 +18,7 @@ BSides/
 │   │   └── assets/
 │   ├── vite.config.js
 │   └── Dockerfile
+├── postgres/         ← Dockerfile: postgres:18-alpine + apk upgrade, gosu removed, runs as uid 70
 ├── tools/vol_mail/   ← Standalone schedule mailer, run on an organizer's machine (no container)
 ├── tools/gather-screenshots/ ← Retakes the README screenshots on a throwaway demo stack (bsides-demo, ports 18080/18082)
 ├── CHANGELOG.md      ← What changed per release; add to Unreleased as changes land. The docs
@@ -76,10 +77,13 @@ once: they want the same ports.
 
 **Images.** Every image is Alpine: the three Python services are `python:3.14-alpine`
 (keep them on one line), frontend is `node:24-alpine` to build and `nginx:alpine` to serve,
-and postgres `18-alpine`. Tags name a line, never an exact patch: Docker Hub stops rebuilding
-a patch tag once the next patch ships, which froze `3.14.3` on a February base with dozens of
+and postgres is built here from `postgres:18-alpine` (`postgres/Dockerfile`). Tags name a
+line, never an exact patch: Docker Hub stops rebuilding a patch tag once the next patch ships, which froze `3.14.3` on a February base with dozens of
 OpenSSL and zlib CVEs. Each app image also runs `apk upgrade --no-cache`, and the Python ones
 uninstall pip once their packages are in (installed as root, so the app can't change them).
+The postgres image also runs `apk upgrade`, deletes `gosu` (an old-Go binary that held almost
+all of its findings) and starts as `postgres` (uid 70), so the entrypoint never calls gosu.
+Its volume must therefore belong to uid 70 (`docs/operations/deployment.md`).
 After rebuilding, run `tools/sbom.sh` (docs/security). None
 installs build tools or curl: every Python dependency ships a musllinux wheel, and healthchecks are a one-line `urllib` call. Backend and
 portal run as uid 1001 (`appuser`; both mount `./logs` with `:U`, so they must match),
@@ -220,8 +224,8 @@ move a ceiling only after reading that major's changelog. Check the musllinux wh
 | `view` | Read-only (GET endpoints) |
 
 ### DB
-- **PostgreSQL 18** (compose service `postgres`, image `postgres:18-alpine`, volume `pgdata18`;
-  the old `pgdata` holds the pre-upgrade 16 data for rollback), via a pooled `psycopg2`
+- **PostgreSQL 18** (compose service `postgres`, built from `postgres:18-alpine` in
+  `postgres/`, volume `pgdata18`; the old `pgdata` holds the pre-upgrade 16 data for rollback), via a pooled `psycopg2`
   connection. `PgClient` in `db.py` is a sqlite3-shaped shim that rewrites `?` to `%s` — that's
   why queries still use `?` placeholders.
 - `RealDictCursor` makes every row a `dict` — use `row["col"]` not `row[0]`.

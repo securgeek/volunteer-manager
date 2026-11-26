@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:9eda95dc-fbb6-466d-ac55-16a0123cab00",
+  "serialNumber": "urn:uuid:a06a0604-7166-4b9a-9c5c-af9df51e4cbc",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-24T01:20:18+00:00",
+    "timestamp": "2026-11-25T02:53:43+00:00",
     "tools": {
       "components": [
         {
@@ -20,9 +20,9 @@
       ]
     },
     "component": {
-      "bom-ref": "f5c9b6b0-a538-4d63-8e73-25a1069c2057",
+      "bom-ref": "c2785f2d-8a64-4dd3-aab6-17a10194adf8",
       "type": "application",
-      "name": "/tmp/tmp.0weHvRLDuq/vol_mail",
+      "name": "/tmp/tmp.Bnb9dyY5fu/vol_mail",
       "properties": [
         {
           "name": "aquasecurity:trivy:SchemaVersion",
@@ -153,7 +153,7 @@
   ],
   "dependencies": [
     {
-      "ref": "f5c9b6b0-a538-4d63-8e73-25a1069c2057",
+      "ref": "c2785f2d-8a64-4dd3-aab6-17a10194adf8",
       "dependsOn": [
         "pkg:pypi/cffi@2.1.1",
         "pkg:pypi/cryptography@50.0.2",

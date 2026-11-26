@@ -8,8 +8,8 @@
 # One CycloneDX file per artifact, made by trivy (https://trivy.dev) with its vulnerability
 # scanner on, so each file lists the components and any known CVEs as of today's database:
 #
-#   backend, portal, mailrelay, frontend   the images podman-compose built
-#   postgres                               the database image compose.yml names
+#   backend, portal, mailrelay, frontend,  the images podman-compose built (postgres is the
+#   postgres                               official image plus apk upgrade, without gosu)
 #   frontend-npm                           the JavaScript libraries bundled into the site
 #                                          (package-lock.json, production dependencies only)
 #   vol_mail                               the mailer's requirements (pip removed), installed into a
@@ -29,7 +29,6 @@ TRIVY="${TRIVY:-trivy}"
 PYTHON="${PYTHON:-python3}"
 OUT="${SBOM_OUT:-docs/security/sbom}"   # SBOM_OUT: write somewhere else, for a trial run
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
-POSTGRES_IMAGE="$(sed -n 's/^ *image: *\(postgres:.*\)$/\1/p' compose.yml | head -1)"
 
 command -v "$TRIVY" >/dev/null || { echo "sbom: trivy not found (set TRIVY=...)" >&2; exit 2; }
 
@@ -57,11 +56,10 @@ scan_image() {
 
 "$TRIVY" image --download-db-only --quiet
 
-for svc in backend portal mailrelay frontend; do
+for svc in backend portal mailrelay frontend postgres; do
     var="IMAGE_${svc^^}"
     scan_image "$svc" "${!var:-localhost/${PROJECT}_${svc}:latest}"
 done
-scan_image postgres "${IMAGE_POSTGRES:-docker.io/library/${POSTGRES_IMAGE}}"
 
 echo "• frontend-npm: frontend/package-lock.json"
 "$TRIVY" fs --quiet --scanners vuln --format cyclonedx \

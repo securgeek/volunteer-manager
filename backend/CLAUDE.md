@@ -555,7 +555,8 @@ The official image (18+) keeps data in `/var/lib/postgresql/<major>/docker` unde
 mounted at `/var/lib/postgresql`, and refuses to start on an older major's data rather than
 silently starting empty. The database is small (about 10 MB in Nov 2026), so a major upgrade
 is a dump and restore into a fresh volume, not `pg_upgrade`. Done 16 → 18 on 2026-11-01; for
-the next one, add a `pgdata19` volume, point the mount and image at it, and:
+the next one, add a `pgdata19` volume, point the mount at it, change `postgres/Dockerfile`'s
+`FROM`, and:
 
 ```bash
 cd ~/Scheduler                                  # on the host
@@ -565,14 +566,15 @@ chmod 600 ~/pg-old.dump                         # outside ~/Scheduler: rsync --d
 COUNTS="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I', table_name), false, true, '')))[1]::text::int from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1"
 podman exec scheduler_postgres_1 psql -U scheduler -d scheduler -Atc "$COUNTS" > ~/pg-old-counts.txt
 podman-compose down                             # podman's --requires link blocks replacing postgres alone
-# rsync the new compose.yml, then:
+# rsync the new compose.yml and postgres/Dockerfile, then:
+podman-compose build postgres
 podman-compose up -d postgres                   # wait for (healthy)
 podman exec -i scheduler_postgres_1 pg_restore -U scheduler -d scheduler --no-owner --exit-on-error < ~/pg-old.dump
 podman exec scheduler_postgres_1 psql -U scheduler -d scheduler -Atc "$COUNTS" | diff ~/pg-old-counts.txt - && echo "row counts match"
 podman-compose up -d
 ```
 
-Rollback is the old image and mount in compose.yml; the old volume is never touched. Once the
+Rollback is the old `FROM` and mount, rebuilt; the old volume is never touched. Once the
 new version has settled, `podman volume rm` the old volume and `shred -u` the dump (it holds
 volunteer names and email ciphertext).
 
